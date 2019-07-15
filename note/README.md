@@ -1,3 +1,4 @@
+<script type="text/javascript" async src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-MML-AM_CHTML"> </script>
 ## 程序功能介绍
 
 该项目的目的是实验音乐的频谱展示，在播放的过程中，计算出频谱，并且用图像显示出来，使得音乐中每个时刻每个频率的变化都能用眼睛看到。总体来说该项目实现的功能有：
