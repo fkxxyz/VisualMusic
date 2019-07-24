@@ -1,4 +1,4 @@
-﻿
+
 #include "stdafx.h"
 #include "wxVisualMusicFrame.h"
 #include <wx/file.h>

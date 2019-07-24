@@ -37,7 +37,7 @@ public:
 	static MMRESULT GetDevCaps(UINT_PTR uDeviceID, LPWAVEOUTCAPS pwoc, UINT cbwoc);
 
 	BOOL GetVolume(LPDWORD pdwVolume);
-	BOOL GetVolume(DWORD dwVolume);
+	BOOL SetVolume(DWORD dwVolume);
 
 	BOOL Open(LPCWAVEFORMATEX pwfx, UINT uDeviceID);
 	BOOL Open(LPCWAVEFORMATEX pwfx, WAVEOUTCALLBACKPROC waveOutProc, DWORD_PTR dwInstance, UINT uDeviceID);

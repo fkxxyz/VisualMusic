@@ -7,11 +7,13 @@
 
 bool Mp3Decoder::run(
 		BasePipe<unsigned char, INPUT_RAWDATA_BUFFER_LEN> *input_rawdata_pipe,
-		BasePipe<unsigned char, OUTPUT_PCM_BUFFER_LEN> *output_pcm_pipe
+		BasePipe<unsigned char, OUTPUT_PCM_BUFFER_LEN> *output_pcm_pipe,
+		sem_t *sem
 		)
 {
 	m_input_rawdata_pipe = input_rawdata_pipe;
 	m_output_pcm_pipe = output_pcm_pipe;
+	m_sem_meta_read = sem;
 
 	struct mad_decoder decoder;
 	mad_decoder_init(&decoder, this, mad_input_func, nullptr, nullptr, mad_output_func, mad_error_func, nullptr);
@@ -40,10 +42,10 @@ mad_flow Mp3Decoder::mad_input_func(void *data, struct mad_stream *stream){
 
 	mad_stream_buffer(stream, mp3_decoder.m_read_buffer, rem_size + count);
 
-	cout<<"mad input "<<count<<" bytes."<<endl;
-
-	if (count == 0)
+	if (count == 0){
+		mp3_decoder.m_output_pcm_pipe->NotifyEnd();
 		return MAD_FLOW_STOP;
+	}
 
 	return MAD_FLOW_CONTINUE;
 }
@@ -57,8 +59,6 @@ mad_flow Mp3Decoder::mad_output_func(void *data, struct mad_header const *, stru
 
 	assert(pcm->channels == 1 || pcm->channels == 2);
 
-	cout<<"mad output "<<pcm->length<<" samples."<<endl;
-
 	if (mp3_decoder.m_stop_flag)
 		return MAD_FLOW_STOP;
 
@@ -67,7 +67,10 @@ mad_flow Mp3Decoder::mad_output_func(void *data, struct mad_header const *, stru
 		mp3_decoder.m_sample_rate = pcm->samplerate;
 		mp3_decoder.m_sizeof_sample = sizeof(int);
 		mp3_decoder.m_typeof_sample = st_int;
+
+		sem_post(mp3_decoder.m_sem_meta_read);
 	}
+
 
 	if (pcm->channels == 1)
 		mp3_decoder.m_output_pcm_pipe->Write(
@@ -79,9 +82,11 @@ mad_flow Mp3Decoder::mad_output_func(void *data, struct mad_header const *, stru
 		mad_fixed_t *p1 = pcm->samples[0], *p2 = pcm->samples[1],
 				*p1_end = p1 + pcm->length,
 				*ps = samples;
-		for (;p1 < p1_end; p1++,p2++){
-			*(ps++) = *p1;
+		while (p1 < p1_end){
 			*(ps++) = *p2;
+			*(ps++) = *p1;
+			p1++;
+			p2++;
 		}
 		mp3_decoder.m_output_pcm_pipe->Write(
 					reinterpret_cast<unsigned char *>(samples),

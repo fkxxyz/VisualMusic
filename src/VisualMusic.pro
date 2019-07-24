@@ -4,32 +4,26 @@ CONFIG -= app_bundle
 CONFIG -= qt
 
 SOURCES += \
-    AudioFileDecoder.cpp \
-    AudioRawDataPipe.cpp \
-    BaseAudioDecoder.cpp \
-    Mp3Decoder.cpp \
-    Mp3RawDataPipe.cpp \
-    PCMPipe.cpp \
+    AudioDecoder/AudioFileDecoder.cpp \
+    AudioDecoder/BaseAudioDecoder.cpp \
+    AudioDecoder/Mp3Decoder.cpp \
+    AudioDecoder/WavDecoder.cpp \
     WavePlayer/WinMMwaveOut.cpp \
     spDraw2D.cpp \
     spDrawBar.cpp \
     spDrawBase.cpp \
-    SpectrumAnalyser.cpp \
-    SpectrumDataPipe.cpp \
-    WavDecoder.cpp \
-    WavRawDataPipe.cpp \
     wxVisualMusicApp.cpp \
     wxVisualMusicFrame.cpp
 
 HEADERS += \
-    AudioFileDecoder.h \
-    AudioRawDataPipe.h \
-    BaseAudioDecoder.h \
-    BasePipe.h \
-    BasePipe.inl \
-    Mp3Decoder.h \
-    Mp3RawDataPipe.h \
-    PCMPipe.h \
+    AudioDecoder/AudioFileDecoder.h \
+    AudioDecoder/BaseAudioDecoder.h \
+    AudioDecoder/BasePipe.h \
+    AudioDecoder/BasePipe.inl \
+    AudioDecoder/Mp3Decoder.h \
+    AudioDecoder/PCMScaler.h \
+    AudioDecoder/PCMScaler.inl \
+    AudioDecoder/WavDecoder.h \
     WavePlayer/WavePlayer.h \
     WavePlayer/WavePlayer_linux.inl \
     WavePlayer/WavePlayer_windows.inl \
@@ -40,14 +34,13 @@ HEADERS += \
     WavePlayer/WinObject.h \
     WavePlayer/WinPCMPlayer.h \
     WavePlayer/WinPCMPlayer.inl \
+    SpectrumAnalyser/SpectrumAnalyser.h \
+    SpectrumAnalyser/SpectrumAnalyser.inl \
     constants.h \
+    VisualMusicController.h \
     spDraw2D.h \
     spDrawBar.h \
     spDrawBase.h \
-    SpectrumAnalyser.h \
-    SpectrumDataPipe.h \
-    WavDecoder.h \
-    WavRawDataPipe.h \
     stdafx.h \
     wxVisualMusicApp.h \
     wxVisualMusicFrame.h

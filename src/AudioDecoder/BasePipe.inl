@@ -1,4 +1,4 @@
-﻿
+
 #include "stdafx.h"
 #include "BasePipe.h"
 #include <cassert>
@@ -7,7 +7,8 @@
 template <class DATATYPE, size_t BUFFER_LEN>
 inline BasePipe<DATATYPE, BUFFER_LEN>::BasePipe():
 	m_pos(0),
-	m_len(0)
+	m_len(0),
+	m_end_flag(false)
 {
 	pthread_mutex_init(&mutexCriticalSection, nullptr);
 	pthread_cond_init(&condVar, nullptr);
@@ -59,6 +60,8 @@ size_t BasePipe<DATATYPE, BUFFER_LEN>::Read(DATATYPE *data, size_t read_min_leng
 	pthread_mutex_lock(&mutexRead);
 
 	m_clean_flag = false;
+	if (m_len == 0 && m_end_flag)
+		return 0;
 
 	size_t read_length = 0; // Length that has been read
 	while (read_length < read_min_length){
@@ -95,6 +98,7 @@ size_t BasePipe<DATATYPE, BUFFER_LEN>::Write(DATATYPE *data, size_t write_length
 	pthread_mutex_lock(&mutexWrite);
 
 	m_clean_flag = false;
+	m_end_flag = false;
 
 	size_t written_length = 0; // Length that has been written
 	while (written_length < write_length){
@@ -127,8 +131,14 @@ size_t BasePipe<DATATYPE, BUFFER_LEN>::Write(DATATYPE *data, size_t write_length
 }
 
 template <class DATATYPE, size_t BUFFER_LEN>
+void BasePipe<DATATYPE, BUFFER_LEN>::NotifyEnd(){
+	m_end_flag = true;
+}
+
+template <class DATATYPE, size_t BUFFER_LEN>
 void BasePipe<DATATYPE, BUFFER_LEN>::Clear(){
 	m_clean_flag = true;
+
 	pthread_cond_signal(&condVar);
 }
 

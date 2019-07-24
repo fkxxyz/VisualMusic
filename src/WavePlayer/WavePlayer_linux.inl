@@ -1,12 +1,27 @@
 #pragma once
 #include "stdafx.h"
 #include "WavePlayer.h"
-#include <cassert>
-
 
 #ifdef linux
 #include <alsa/asoundlib.h>
+#include <sys/time.h>
+#include <cassert>
+#include <unistd.h>
 
+namespace WavePlayer_linux {
+	typedef struct {
+		size_t written;
+		size_t last_pos;
+		__int64_t last_pos_us;
+	} pdata_t;
+
+	inline __int64_t get_current_us(){
+		struct timeval tv;
+		struct timezone tz;
+		gettimeofday(&tv,&tz);
+		return tv.tv_sec * 1000000 + tv.tv_usec;
+	}
+}
 
 inline WavePlayer::WavePlayer()
 	:m_handle(nullptr)
@@ -15,6 +30,7 @@ inline WavePlayer::WavePlayer()
 }
 
 inline bool WavePlayer::Open(unsigned int channels, unsigned int sample_rate, enum format format){
+	WavePlayer_linux::pdata_t *pdata = reinterpret_cast<WavePlayer_linux::pdata_t *>(m_pdata);
 	assert(m_handle == nullptr);
 
 	m_channels = channels;
@@ -34,6 +50,7 @@ inline bool WavePlayer::Open(unsigned int channels, unsigned int sample_rate, en
 		return false;
 	}
 	m_format = format;
+	m_sample_rate = sample_rate;
 
 	snd_pcm_t *handle = reinterpret_cast<snd_pcm_t *>(m_handle);
 
@@ -66,6 +83,9 @@ inline bool WavePlayer::Open(unsigned int channels, unsigned int sample_rate, en
 		goto fail_free;
 
 	snd_pcm_hw_params_free(m_params);
+	pdata->written = 0;
+	pdata->last_pos = 0;
+	pdata->last_pos_us = WavePlayer_linux::get_current_us();
 	return true;
 
 fail_free:
@@ -75,25 +95,74 @@ fail_free:
 
 inline bool WavePlayer::Play(void *data, size_t length){
 	snd_pcm_t *handle = reinterpret_cast<snd_pcm_t *>(m_handle);
-	return snd_pcm_writei(handle, data, length) > 0;
+	WavePlayer_linux::pdata_t *pdata = reinterpret_cast<WavePlayer_linux::pdata_t *>(m_pdata);
+	snd_pcm_sframes_t result = snd_pcm_writei(handle, data, length);
+	if (result < 0){
+		snd_pcm_recover(handle, static_cast<int>(result), 0);
+		result = snd_pcm_writei(handle, data, length);
+		if (result < 0){
+			assert(0);
+		}
+	}
+	pdata->written += length;
+	return result == static_cast<snd_pcm_sframes_t>(length);
 }
 
 inline bool WavePlayer::Play(unsigned char *data, size_t length){
-	assert(m_handle);
+	enum status status = GetStatus();
+	assert(status == st_opened || status == st_playing);
 	assert(m_format == fm_uchar);
 	return Play(reinterpret_cast<void *>(data), length);
 }
 
 inline bool WavePlayer::Play(short int *data, size_t length){
-	assert(m_handle);
+	enum status status = GetStatus();
+	assert(status == st_opened || status == st_playing);
 	assert(m_format == fm_short);
 	return Play(reinterpret_cast<void *>(data), length);
 }
 
 inline bool WavePlayer::Play(float *data, size_t length){
-	assert(m_handle);
+	enum status status = GetStatus();
+	assert(status == st_opened || status == st_playing);
 	assert(m_format == fm_float);
 	return Play(reinterpret_cast<void *>(data), length);
+}
+
+inline size_t WavePlayer::GetPos(){
+	snd_pcm_t *handle = reinterpret_cast<snd_pcm_t *>(m_handle);
+	WavePlayer_linux::pdata_t *pdata = reinterpret_cast<WavePlayer_linux::pdata_t *>(m_pdata);
+
+	snd_pcm_sframes_t sframes;
+	if (snd_pcm_delay(handle, &sframes) == 0)
+		return pdata->written - static_cast<size_t>(sframes);
+	else
+		return static_cast<size_t>(-1);
+}
+
+inline bool WavePlayer::Join(){
+	assert(GetStatus() == st_playing);
+
+	const int test_interval = 16; // millseconds
+	const double rate_err = 0.95;
+
+	WavePlayer_linux::pdata_t *pdata = reinterpret_cast<WavePlayer_linux::pdata_t *>(m_pdata);
+
+	while (1){
+		__int64_t cur_us = WavePlayer_linux::get_current_us();
+		size_t cur_pos = GetPos();
+
+		if (pdata->last_pos)
+			if (cur_us - pdata->last_pos_us > test_interval * 1000)
+				if (static_cast<double>(cur_pos - pdata->last_pos) / (static_cast<double>(cur_us - pdata->last_pos_us)/1000000) < m_sample_rate * rate_err)
+					break;
+
+		pdata->last_pos = cur_pos;
+		pdata->last_pos_us = cur_us;
+
+		usleep(test_interval * 1000);
+	}
+	return true;
 }
 
 inline enum WavePlayer::status WavePlayer::GetStatus(){
@@ -101,8 +170,9 @@ inline enum WavePlayer::status WavePlayer::GetStatus(){
 		return st_closed;
 
 	snd_pcm_t *handle = reinterpret_cast<snd_pcm_t *>(m_handle);
-	switch (snd_pcm_state(handle)){
-	case SND_PCM_STATE_OPEN:
+	snd_pcm_state_t state = snd_pcm_state(handle);
+	switch (state){
+	case SND_PCM_STATE_OPEN: case SND_PCM_STATE_PREPARED: case SND_PCM_STATE_XRUN:
 		return st_opened;
 	case SND_PCM_STATE_RUNNING:
 		return st_playing;
@@ -114,24 +184,27 @@ inline enum WavePlayer::status WavePlayer::GetStatus(){
 }
 
 inline bool WavePlayer::Pause(){
-	assert(m_handle);
+	assert(GetStatus() == st_playing);
 	snd_pcm_t *handle = reinterpret_cast<snd_pcm_t *>(m_handle);
 	return snd_pcm_wait(handle, -1) == 0;
 }
 
 inline bool WavePlayer::Resume(){
-	assert(m_handle);
+	assert(GetStatus() == st_pause);
 	snd_pcm_t *handle = reinterpret_cast<snd_pcm_t *>(m_handle);
 	return snd_pcm_resume(handle) == 0;
 }
 
 inline bool WavePlayer::Stop(){
-	assert(m_handle);
+	assert(GetStatus() == st_playing);
 	snd_pcm_t *handle = reinterpret_cast<snd_pcm_t *>(m_handle);
-	return snd_pcm_drop(handle) == 0;
+	if (snd_pcm_drop(handle) != 0)
+		return false;
+	return snd_pcm_prepare(handle) == 0;
 }
 
 inline bool WavePlayer::Close(){
+	assert(GetStatus() == st_opened);
 	assert(m_handle);
 	snd_pcm_t *handle = reinterpret_cast<snd_pcm_t *>(m_handle);
 	return snd_pcm_close(handle) == 0;

@@ -22,6 +22,8 @@ public:
 	bool Play(unsigned char *data, size_t length);
 	bool Play(short int *data, size_t length);
 	bool Play(float *data, size_t length);
+	size_t GetPos();
+	bool Join();
 	bool Pause();
 	bool Resume();
 	enum status GetStatus();
@@ -32,6 +34,9 @@ protected:
 	void *m_handle;
 	enum format m_format;
 	unsigned int m_channels;
+	unsigned int m_sample_rate;
+
+	char m_pdata[64];
 
 	bool Play(void *data, size_t length);
 };

@@ -23,7 +23,7 @@ inline BOOL CWinMMWaveOut::GetVolume(LPDWORD pdwVolume){
 }
 
 // waveOutSetVolume
-inline BOOL CWinMMWaveOut::GetVolume(DWORD dwVolume){
+inline BOOL CWinMMWaveOut::SetVolume(DWORD dwVolume){
 	assert(m_hWavaOut != NULL);
 	mmrLastResult = waveOutSetVolume(m_hWavaOut, dwVolume);
 	return mmrLastResult == MMSYSERR_NOERROR;

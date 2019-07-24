@@ -13,7 +13,7 @@ inline WavePlayer::WavePlayer()
 }
 
 inline bool WavePlayer::Open(unsigned int channels, unsigned int sample_rate, enum format format){
-	assert(m_status == st_closed);
+	assert(static_cast<enum WavePlayer::status>(player.GetStatus()) == st_closed);
 
 	m_channels = channels;
 	m_format = format;
@@ -32,7 +32,7 @@ inline bool WavePlayer::Open(unsigned int channels, unsigned int sample_rate, en
 	wFormat.cbSize = 0;
 	player.Open(&wFormat);
 
-	m_status = st_opened;
+	static_cast<enum WavePlayer::status>(player.GetStatus()) = st_opened;
 	return true;
 }
 
@@ -42,53 +42,51 @@ inline bool WavePlayer::Play(void *data, size_t length){
 }
 
 inline bool WavePlayer::Play(unsigned char *data, size_t length){
-	assert(m_status == st_opened);
+	assert(static_cast<enum WavePlayer::status>(player.GetStatus()) == st_opened);
 	assert(m_format == fm_uchar);
 	return Play(reinterpret_cast<void *>(data), length);
 }
 
 inline bool WavePlayer::Play(short int *data, size_t length){
-	assert(m_status == st_opened);
+	assert(static_cast<enum WavePlayer::status>(player.GetStatus()) == st_opened);
 	assert(m_format == fm_short);
 	return Play(reinterpret_cast<void *>(data), length);
 }
 
 inline bool WavePlayer::Play(float *data, size_t length){
-	assert(m_status == st_opened);
+	assert(static_cast<enum WavePlayer::status>(player.GetStatus()) == st_opened);
 	assert(m_format == fm_float);
 	return Play(reinterpret_cast<void *>(data), length);
 }
 
 inline bool WavePlayer::Pause(){
-	assert(m_status == st_playing);
+	assert(static_cast<enum WavePlayer::status>(player.GetStatus()) == st_playing);
 
 	CWinPCMPlayer<> &player = *reinterpret_cast<CWinPCMPlayer<> *>(m_handle);
 	return player.Pause() == TRUE;
 }
 
 inline bool WavePlayer::Resume(){
-	assert(m_status == st_playing);
+	assert(static_cast<enum WavePlayer::status>(player.GetStatus()) == st_playing);
 
 	CWinPCMPlayer<> &player = *reinterpret_cast<CWinPCMPlayer<> *>(m_handle);
 	return player.Resume() == TRUE;
 }
 
 inline enum WavePlayer::status WavePlayer::GetStatus(){
-	assert(m_status == st_playing);
-
 	CWinPCMPlayer<> &player = *reinterpret_cast<CWinPCMPlayer<> *>(m_handle);
 	return static_cast<enum WavePlayer::status>(player.GetStatus());
 }
 
 inline bool WavePlayer::Stop(){
-	assert(m_status == st_playing);
+	assert(static_cast<enum WavePlayer::status>(player.GetStatus()) == st_playing);
 
 	CWinPCMPlayer<> &player = *reinterpret_cast<CWinPCMPlayer<> *>(m_handle);
 	return player.Reset() == TRUE;
 }
 
 inline bool WavePlayer::Close(){
-	assert(m_status == st_opened);
+	assert(static_cast<enum WavePlayer::status>(player.GetStatus()) == st_opened);
 
 	CWinPCMPlayer<> &player = *reinterpret_cast<CWinPCMPlayer<> *>(m_handle);
 	return player.Close() == TRUE;

@@ -33,7 +33,7 @@ inline void CALLBACK CWinPCMPlayer<nBufferNumber>::waveOutProc(HWAVEOUT hwo, UIN
 }
 
 
-// 打开设备
+// Open device
 template <int nBufferNumber>
 inline BOOL CWinPCMPlayer<nBufferNumber>::Open(WAVEFORMATEX *pFormat){
 	CCriticalSectionFunction objCriticalFunction(m_CriticalSection);
@@ -42,28 +42,28 @@ inline BOOL CWinPCMPlayer<nBufferNumber>::Open(WAVEFORMATEX *pFormat){
 
 	stWaveFormat = *pFormat;
 
-	// 检查波形格式参数
+	// Check wave format metadata
 	if (!ValidWaveFormat())
 		return FALSE;
 
-	// 初始化事件对象
+	// Initialize event objects
 	if (!AHeaderDoneEvent && !AHeaderDoneEvent.Create())
 		return FALSE;
 	if (!AllHeaderIdle && !AllHeaderIdle.Create())
 		return FALSE;
 
-	// 打开波形设备
+	// Open wave device
 	if (!objMMWO.Open(&stWaveFormat, (WAVEOUTCALLBACKPROC)&waveOutProc, (DWORD_PTR)this))
 		return FALSE;
 
-	// 初始化所有波形头部
+	// Initialize the head of all waves
 	ZeroMemory(header, sizeof(header));
 	for (int i = 0; i < nBufferNumber; i++){
 		if (!objMMWO.PrepareHeader(&header[i], sizeof(WAVEHDR)))
 			return FALSE;
 	}
 
-	// 处理事件对象
+	// Deal with event objects
 	nIdleHeader = nBufferNumber;
 	if (!AHeaderDoneEvent.Reset())
 		return FALSE;
@@ -84,7 +84,7 @@ inline BOOL CWinPCMPlayer<nBufferNumber>::Close(){
 			return FALSE;
 	}
 
-	// 关闭波形设备
+	// Close wave device
 	if (!objMMWO.Close())
 		return FALSE;
 
@@ -128,21 +128,21 @@ inline BOOL CWinPCMPlayer<nBufferNumber>::Insert(void *PcmBuffer, DWORD dwPcmSiz
 	assert(PcmBuffer);
 	assert(dwPcmSize > 0);
 
-	// 获取一个空闲的头部
+	// Get a idle header
 	PWAVEHDR pHeader = WaitAndGetIdleHeader();
 
-	// 设置这个空闲的头部
+	// Set this idle header
 	SetHeader(pHeader, PcmBuffer, dwPcmSize, dwLoopTimes);
 
 	if (!AllHeaderIdle.Reset())
 		return FALSE;
 
-	// 将此头部加入队列
+	// Add this header to the queue
 	if (!objMMWO.Write(pHeader, sizeof(WAVEHDR)))
 		return FALSE;
 	assert(pHeader->dwFlags & WHDR_INQUEUE);
 
-	// 处理空闲头部个数
+	// Deal with the count of idle header
 	nIdleHeader--;
 	assert(nIdleHeader >= 0);
 
@@ -159,10 +159,10 @@ inline void CWinPCMPlayer<nBufferNumber>::SetHeader(PWAVEHDR pHeader, void *PcmB
 	pHeader->lpData = (LPSTR)PcmBuffer;
 	pHeader->dwBufferLength = dwPcmSize;
 	if (dwLoopTimes < 2){
-		// 如果不循环，则去除循环标志位
+		// Remove the loop flag when dwLoopTimes has no cycles
 		pHeader->dwFlags &= 0x1F ^ (WHDR_BEGINLOOP | WHDR_ENDLOOP);
 	} else {
-		// 循环则设置循环
+		// Set the cycles when dwLoopTimes has cycles
 		pHeader->dwLoops = dwLoopTimes;
 		pHeader->dwFlags |= WHDR_BEGINLOOP | WHDR_ENDLOOP;
 	}
@@ -170,11 +170,11 @@ inline void CWinPCMPlayer<nBufferNumber>::SetHeader(PWAVEHDR pHeader, void *PcmB
 
 template <int nBufferNumber>
 inline void CWinPCMPlayer<nBufferNumber>::AHeaderDone(PWAVEHDR pHeader){
-	// 设置空闲头部个数
+	// Set the count of idle headers
 	nIdleHeader++;
 	assert(nIdleHeader <= nBufferNumber);
 
-	// 根据空闲头部个数设置相关事件
+	// Set related events according to the number of idle heads
 	if (nIdleHeader == nBufferNumber){
 		dwStatus = PCM_READY;
 		if (!AllHeaderIdle.Set())
@@ -280,23 +280,23 @@ inline CWinMMWaveOut *CWinPCMPlayer<nBufferNumber>::GetMMwaveOut(){
 
 template <int nBufferNumber>
 inline BOOL CWinPCMPlayer<nBufferNumber>::ValidWaveFormat(){
-	// 必须为 pcm 格式
+	// Must be pcm format
 	if (stWaveFormat.wFormatTag != WAVE_FORMAT_PCM && stWaveFormat.wFormatTag != 3)
 		return FALSE;
 
-	// 检查声道数
+	// Check channels
 	if (stWaveFormat.nChannels < 1 || stWaveFormat.nChannels >2)
 		return FALSE;
 
-	// 检查采样率
+	// Check sampling rate
 	if (stWaveFormat.nSamplesPerSec < 20 || stWaveFormat.nSamplesPerSec > 176400)
 		return FALSE;
 
-	// 检查样本位数
+	// Check bits of sample
 	if (stWaveFormat.wBitsPerSample != 8 && stWaveFormat.wBitsPerSample != 16 && stWaveFormat.wBitsPerSample != 32)
 		return FALSE;
 
-	// 检查数据块的调整数
+	// Check data block align
 	if (
 		stWaveFormat.nBlockAlign 
 			!=
@@ -304,7 +304,7 @@ inline BOOL CWinPCMPlayer<nBufferNumber>::ValidWaveFormat(){
 		)
 		return FALSE;
 
-	// 检查数据传输速率
+	// Check bytes per seconds
 	if (
 		stWaveFormat.nAvgBytesPerSec
 			!=
@@ -312,7 +312,7 @@ inline BOOL CWinPCMPlayer<nBufferNumber>::ValidWaveFormat(){
 		)
 		return FALSE;
 
-	// 检查附加数据
+	// Check extera data
 	if (stWaveFormat.cbSize != 0)
 		goto lErrBadFormat;
 

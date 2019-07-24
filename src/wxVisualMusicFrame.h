@@ -1,7 +1,7 @@
 ﻿#pragma once
 #include "stdafx.h"
 #include <wx/wx.h>
-#include "AudioFileDecoder.h"
+#include "AudioDecoder/AudioFileDecoder.h"
 #include "WavePlayer/WavePlayer.h"
 
 class wxVisualMusicFrame : public wxFrame {
