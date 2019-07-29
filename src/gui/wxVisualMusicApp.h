@@ -1,10 +1,12 @@
 #pragma once
 #include "stdafx.h"
-#include <wx/wx.h>
+
+#ifdef USE_WX
 
 class wxVisualMusicApp: public wxApp {
 public:
 	virtual bool OnInit();
 };
 
+#endif
 

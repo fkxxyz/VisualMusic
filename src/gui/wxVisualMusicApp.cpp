@@ -2,9 +2,11 @@
 #include "stdafx.h"
 #include "wxVisualMusicApp.h"
 #include "wxVisualMusicFrame.h"
-#include "AudioDecoder/PCMScaler.h"
 
-//wxIMPLEMENT_APP(wxVisualMusicApp);
+
+#ifdef USE_WX
+
+wxIMPLEMENT_APP(wxVisualMusicApp);
 
 bool wxVisualMusicApp::OnInit(){
 	wxVisualMusicFrame *frame = new wxVisualMusicFrame("VisualMusic");
@@ -12,6 +14,11 @@ bool wxVisualMusicApp::OnInit(){
 	return true;
 }
 
+#endif
+
+
+
+/*
 #include <iostream>
 using namespace std;
 #include "WavePlayer/WavePlayer.h"
@@ -21,6 +28,14 @@ using namespace std;
 #define RATE 44100
 #define freq 4000
 #define t 1
+
+int main(){
+	VisualMusicController control;
+	control.StartAllThread("/home/qaz/Music/CloudMusic/Diana Boncheva - Beethoven Virus.mp3");
+	control.OpenWavePlayer();
+	sleep(100000);
+	return 0;
+}
 
 int main(){
 	float voice[RATE * t];
@@ -39,7 +54,6 @@ int main(){
 	return 0;
 }
 
-/*
 
 int main(){
 	AudioFileDecoder fd;

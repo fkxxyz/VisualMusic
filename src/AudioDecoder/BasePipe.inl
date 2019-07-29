@@ -16,6 +16,20 @@ inline BasePipe<DATATYPE, BUFFER_LEN>::BasePipe():
 	pthread_mutex_init(&mutexWrite, nullptr);
 }
 
+template <class DATATYPE, size_t BUFFER_LEN>
+void BasePipe<DATATYPE, BUFFER_LEN>::Skip(size_t length){
+	assert(m_len <= BUFFER_LEN);
+	assert(m_pos < BUFFER_LEN);
+	assert(length <= m_len);
+
+	if (m_pos + length > BUFFER_LEN){
+		m_pos = length - (BUFFER_LEN - m_pos);
+	} else {
+		m_pos += length;
+		if (m_pos == BUFFER_LEN) m_pos = 0;
+	}
+	m_len -= length;
+}
 
 template <class DATATYPE, size_t BUFFER_LEN>
 void BasePipe<DATATYPE, BUFFER_LEN>::ReadTo(DATATYPE *data, size_t length){
@@ -60,14 +74,16 @@ size_t BasePipe<DATATYPE, BUFFER_LEN>::Read(DATATYPE *data, size_t read_min_leng
 	pthread_mutex_lock(&mutexRead);
 
 	m_clean_flag = false;
-	if (m_len == 0 && m_end_flag)
-		return 0;
 
 	size_t read_length = 0; // Length that has been read
 	while (read_length < read_min_length){
 		pthread_mutex_lock(&mutexCriticalSection);
 
 		if (m_len == 0){ // Block when has no data to read.
+			if (m_end_flag){
+				pthread_mutex_unlock(&mutexCriticalSection);
+				break;
+			}
 			pthread_cond_wait(&condVar, &mutexCriticalSection);
 			if (m_clean_flag){
 				m_pos = 0;
@@ -80,7 +96,10 @@ size_t BasePipe<DATATYPE, BUFFER_LEN>::Read(DATATYPE *data, size_t read_min_leng
 
 		size_t r_length = read_max_length - read_length; // The remaining free length in the parameter buffer
 		size_t length = r_length < m_len ? r_length : m_len;
-		ReadTo(data + read_length, length);
+		if (data)
+			ReadTo(data + read_length, length);
+		else
+			Skip(length);
 		read_length += length;
 
 		pthread_mutex_unlock(&mutexCriticalSection);
@@ -133,6 +152,7 @@ size_t BasePipe<DATATYPE, BUFFER_LEN>::Write(DATATYPE *data, size_t write_length
 template <class DATATYPE, size_t BUFFER_LEN>
 void BasePipe<DATATYPE, BUFFER_LEN>::NotifyEnd(){
 	m_end_flag = true;
+	pthread_cond_signal(&condVar);
 }
 
 template <class DATATYPE, size_t BUFFER_LEN>

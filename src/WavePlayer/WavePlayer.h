@@ -8,7 +8,8 @@ public:
 		fm_null = 0,
 		fm_uchar = 8,
 		fm_short = 16,
-		fm_float = 32
+		fm_float = 32,
+		fm_double = 64
 	};
 	enum status {
 		st_closed,
@@ -19,9 +20,10 @@ public:
 
 	WavePlayer();
 	bool Open(unsigned int channels = 2, unsigned int sample_rate = 44100, enum format format = fm_short);
-	bool Play(unsigned char *data, size_t length);
-	bool Play(short int *data, size_t length);
-	bool Play(float *data, size_t length);
+	bool Write(unsigned char *data, size_t length);
+	bool Write(short int *data, size_t length);
+	bool Write(float *data, size_t length);
+	bool Write(double *data, size_t length);
 	size_t GetPos();
 	bool Join();
 	bool Pause();
@@ -38,7 +40,7 @@ protected:
 
 	char m_pdata[64];
 
-	bool Play(void *data, size_t length);
+	bool Write(void *data, size_t length);
 };
 
 #include "WavePlayer_windows.inl"

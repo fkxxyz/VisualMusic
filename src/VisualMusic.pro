@@ -9,11 +9,8 @@ SOURCES += \
     AudioDecoder/Mp3Decoder.cpp \
     AudioDecoder/WavDecoder.cpp \
     WavePlayer/WinMMwaveOut.cpp \
-    spDraw2D.cpp \
-    spDrawBar.cpp \
-    spDrawBase.cpp \
-    wxVisualMusicApp.cpp \
-    wxVisualMusicFrame.cpp
+    gui/wxVisualMusicApp.cpp \
+    gui/wxVisualMusicFrame.cpp
 
 HEADERS += \
     AudioDecoder/AudioFileDecoder.h \
@@ -36,14 +33,14 @@ HEADERS += \
     WavePlayer/WinPCMPlayer.inl \
     SpectrumAnalyser/SpectrumAnalyser.h \
     SpectrumAnalyser/SpectrumAnalyser.inl \
+    DrawTemplate/colordef.h \
+    DrawTemplate/DrawTemplate.h \
+    DrawSpectrum/DrawSpectrum.h \
+    gui/wxVisualMusicApp.h \
+    gui/wxVisualMusicFrame.h \
     constants.h \
     VisualMusicController.h \
-    spDraw2D.h \
-    spDrawBar.h \
-    spDrawBase.h \
-    stdafx.h \
-    wxVisualMusicApp.h \
-    wxVisualMusicFrame.h
+    stdafx.h
 
 INCLUDEPATH += \
     /usr/lib/wx/include/gtk2-unicode-3.0 \

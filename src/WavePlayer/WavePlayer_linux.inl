@@ -46,6 +46,9 @@ inline bool WavePlayer::Open(unsigned int channels, unsigned int sample_rate, en
 	case fm_float:
 		pcm_format = SND_PCM_FORMAT_FLOAT_LE;
 		break;
+	case fm_double:
+		pcm_format = SND_PCM_FORMAT_FLOAT64_LE;
+		break;
 	default:
 		return false;
 	}
@@ -93,7 +96,7 @@ fail_free:
 	return false;
 }
 
-inline bool WavePlayer::Play(void *data, size_t length){
+inline bool WavePlayer::Write(void *data, size_t length){
 	snd_pcm_t *handle = reinterpret_cast<snd_pcm_t *>(m_handle);
 	WavePlayer_linux::pdata_t *pdata = reinterpret_cast<WavePlayer_linux::pdata_t *>(m_pdata);
 	snd_pcm_sframes_t result = snd_pcm_writei(handle, data, length);
@@ -108,28 +111,36 @@ inline bool WavePlayer::Play(void *data, size_t length){
 	return result == static_cast<snd_pcm_sframes_t>(length);
 }
 
-inline bool WavePlayer::Play(unsigned char *data, size_t length){
+inline bool WavePlayer::Write(unsigned char *data, size_t length){
 	enum status status = GetStatus();
 	assert(status == st_opened || status == st_playing);
 	assert(m_format == fm_uchar);
-	return Play(reinterpret_cast<void *>(data), length);
+	return Write(reinterpret_cast<void *>(data), length);
 }
 
-inline bool WavePlayer::Play(short int *data, size_t length){
+inline bool WavePlayer::Write(short int *data, size_t length){
 	enum status status = GetStatus();
 	assert(status == st_opened || status == st_playing);
 	assert(m_format == fm_short);
-	return Play(reinterpret_cast<void *>(data), length);
+	return Write(reinterpret_cast<void *>(data), length);
 }
 
-inline bool WavePlayer::Play(float *data, size_t length){
+inline bool WavePlayer::Write(float *data, size_t length){
 	enum status status = GetStatus();
 	assert(status == st_opened || status == st_playing);
 	assert(m_format == fm_float);
-	return Play(reinterpret_cast<void *>(data), length);
+	return Write(reinterpret_cast<void *>(data), length);
+}
+
+inline bool WavePlayer::Write(double *data, size_t length){
+	enum status status = GetStatus();
+	assert(status == st_opened || status == st_playing);
+	assert(m_format == fm_double);
+	return Write(reinterpret_cast<void *>(data), length);
 }
 
 inline size_t WavePlayer::GetPos(){
+	assert(m_handle);
 	snd_pcm_t *handle = reinterpret_cast<snd_pcm_t *>(m_handle);
 	WavePlayer_linux::pdata_t *pdata = reinterpret_cast<WavePlayer_linux::pdata_t *>(m_pdata);
 

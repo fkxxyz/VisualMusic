@@ -20,6 +20,8 @@ bool Mp3Decoder::run(
 	int result = mad_decoder_run(&decoder, MAD_DECODER_MODE_SYNC);
 	mad_decoder_finish(&decoder);
 
+	m_output_pcm_pipe->NotifyEnd();
+
 	m_stop_flag = false;
 
 	return m_channels && result == MAD_ERROR_NONE;
@@ -42,10 +44,8 @@ mad_flow Mp3Decoder::mad_input_func(void *data, struct mad_stream *stream){
 
 	mad_stream_buffer(stream, mp3_decoder.m_read_buffer, rem_size + count);
 
-	if (count == 0){
-		mp3_decoder.m_output_pcm_pipe->NotifyEnd();
+	if (count == 0)
 		return MAD_FLOW_STOP;
-	}
 
 	return MAD_FLOW_CONTINUE;
 }

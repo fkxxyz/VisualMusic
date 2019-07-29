@@ -5,6 +5,9 @@
 
 class PCMScaler {
 public:
+	template <class dest_type>
+	static void Scale(dest_type *dest, void *src, size_t length, BaseAudioDecoder::sample_type sample_type);
+
 	static void Scale(unsigned char *dest, mad_fixed_t *src, size_t length);
 	static void Scale(short int *dest, mad_fixed_t *src, size_t length);
 	static void Scale(float *dest, mad_fixed_t *src, size_t length);

@@ -6,35 +6,11 @@
 #include <cmath>
 
 
-template <int FREQ_N, int FRAME_SAMPLE_N, int FRAME_N>
-SpectrumAnalyser<FREQ_N, FRAME_SAMPLE_N, FRAME_N>::SpectrumAnalyser(
-		const double freqs[FREQ_N], const double sample_rate, const int time_slice_div):
-	m_const_sample_rate(sample_rate),
-	m_const_freqs(freqs),
-	m_const_time_slice_div(time_slice_div)
+template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
+SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::SpectrumAnalyser()
 {
 	assert(MIN_WIN_N_VIB <= MAX_WIN_N_VIB);
 	assert(MIN_WIN_N_VIB > 0);
-
-	assert(FRAME_N % 2 == 0);
-
-	// Make sure the frequency array is strictly increasing.
-	for (int i = 0; i < FREQ_N - 1; i++)
-		assert(freqs[i] < freqs[i+1]); // Please sort it.
-
-	// Calculate the number of samples included in each cycle at each frequency
-	for (int i = 0; i < FREQ_N; i++)
-		m_n_cycle_samples_o[i] = static_cast<double>(i)/(m_const_sample_rate / m_const_freqs[i])
-
-	// It must be ensured that the lowest frequency can vibrate
-	//   for the specified minimum period within a given number of samples.
-	assert(FRAME_SAMPLE_N * FRAME_N / 2 >= m_n_cycle_samples_o[0] * MIN_WIN_N_VIB);
-
-	Clear();
-	ld_index = 0;
-
-	m_input_pcm_length = 0;
-	m_output_sepectrum_length = 0;
 
 	pthread_cond_init(&m_cond_put, nullptr);
 	pthread_cond_init(&m_cond_get, nullptr);
@@ -52,35 +28,76 @@ SpectrumAnalyser<FREQ_N, FRAME_SAMPLE_N, FRAME_N>::SpectrumAnalyser(
 	}
 }
 
-template <int FREQ_N, int FRAME_SAMPLE_N, int FRAME_N>
-SpectrumAnalyser<FREQ_N, FRAME_SAMPLE_N, FRAME_N>::~SpectrumAnalyser(){
+template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
+SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::~SpectrumAnalyser(){
 	delete[] sin_o;
 }
 
 
-template <int FREQ_N, int FRAME_SAMPLE_N, int FRAME_N>
-bool SpectrumAnalyser<FREQ_N, FRAME_SAMPLE_N, FRAME_N>::TurnOn(){
+template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
+bool SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::TurnOn(){
 	if (pthread_create(&m_thread, nullptr, thread_proc, this))
 		return false;
 }
 
-template <int FREQ_N, int FRAME_SAMPLE_N, int FRAME_N>
-void SpectrumAnalyser<FREQ_N, FRAME_SAMPLE_N, FRAME_N>::TurnOff(){
+template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
+void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::TurnOff(){
 
 }
 
+template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
+void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::SetArguments(
+		const double *freqs,
+		const int freq_n,
+		const double sample_rate,
+		const int frame_sample_n
+		)
+{
 
-template <int FREQ_N, int FRAME_SAMPLE_N, int FRAME_N>
-void SpectrumAnalyser<FREQ_N, FRAME_SAMPLE_N, FRAME_N>::Put(double *pcm, int length){
-	assert(pcm);
-	assert(length <= FRAME_SAMPLE_N * FRAME_N);
+	pthread_mutex_lock(&m_mutex_put);
+	pthread_mutex_lock(&m_mutex_get);
+
+	m_const_frame_sample_n = frame_sample_n;
+	assert(m_const_frame_sample_n <= MAX_FRAME_SAMPLE_N);
+
+	m_const_freq_n = freq_n;
+
+	pthread_mutex_unlock(&m_mutex_put);
+	pthread_mutex_unlock(&m_mutex_get);
+
+	Clear();
+
+	// Make sure the frequency array is strictly increasing.
+	for (int i = 0; i < m_const_freq_n - 1; i++)
+		assert(freqs[i] < freqs[i+1]); // Please sort it.
+
+	// Calculate the number of samples included in each cycle at each frequency
+	for (int i = 0; i < m_const_freq_n; i++)
+		m_n_cycle_samples_o[i] = sample_rate / freqs[i];
 
 	// It must be ensured that the lowest frequency can vibrate
 	//   for the specified minimum period within a given number of samples.
-	assert(length >= m_n_cycle_samples_o[0] * MIN_WIN_N_VIB);
+	assert(m_const_frame_sample_n * FRAME_N >= m_n_cycle_samples_o[0] * MIN_WIN_N_VIB * 2);
+
+	m_const_reserve_frame_n = static_cast<int>(m_n_cycle_samples_o[0] / m_const_frame_sample_n * MIN_WIN_N_VIB);
+}
+
+template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
+int SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::GetCountOfReserveFrame() const {
+	return m_const_reserve_frame_n;
+}
+
+template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
+void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Put(double *pcm, int length){
+	assert(pcm);
+	assert(length <= m_const_frame_sample_n * FRAME_N);
+
+	// It must be ensured that the lowest frequency can vibrate
+	//   for the specified minimum period within a given number of samples.
+	assert(length >= static_cast<int>(m_n_cycle_samples_o[0] * MIN_WIN_N_VIB * 2));
 
 	// Make sure length is an integer multiple of FRAME_SAMPLE_N
-	assert(length % FRAME_SAMPLE_N == 0);
+	assert(length % m_const_frame_sample_n == 0);
 
 	pthread_mutex_lock(&m_mutex_put);
 
@@ -97,8 +114,8 @@ void SpectrumAnalyser<FREQ_N, FRAME_SAMPLE_N, FRAME_N>::Put(double *pcm, int len
 		pthread_cond_signal(&m_cond_put);
 }
 
-template <int FREQ_N, int FRAME_SAMPLE_N, int FRAME_N>
-int SpectrumAnalyser<FREQ_N, FRAME_SAMPLE_N, FRAME_N>::Get(double *sepectrum[FREQ_N]){
+template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
+int SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Get(double (*sepectrum)[MAX_FREQ_N]){
 	assert(sepectrum);
 
 	pthread_mutex_lock(&m_mutex_get);
@@ -109,7 +126,7 @@ int SpectrumAnalyser<FREQ_N, FRAME_SAMPLE_N, FRAME_N>::Get(double *sepectrum[FRE
 
 	int length = m_output_sepectrum_length;
 
-	memcpy(sepectrum, length, length * sizeof(double) * FREQ_N);
+	memcpy(sepectrum, m_output_sepectrum, length * sizeof(double) * MAX_FREQ_N);
 	m_output_sepectrum_length = 0;
 
 	pthread_mutex_unlock(&m_mutex_get);
@@ -120,16 +137,19 @@ int SpectrumAnalyser<FREQ_N, FRAME_SAMPLE_N, FRAME_N>::Get(double *sepectrum[FRE
 }
 
 
-template <int FREQ_N, int FRAME_SAMPLE_N, int FRAME_N>
-void SpectrumAnalyser<FREQ_N, FRAME_SAMPLE_N, FRAME_N>::Clear(){
-	pthread_mutex_lock(m_mutex_put);
-	pthread_mutex_lock(m_mutex_get);
+template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
+void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Clear(){
+	pthread_mutex_lock(&m_mutex_put);
+	pthread_mutex_lock(&m_mutex_get);
+
+	ld_index = 0;
 
 	m_input_pcm_length = 0;
+
 	ld[0].length = 0;
-	ld[0].phase = 0;
+	memset(ld[0].phase, 0, m_const_freq_n * sizeof(double));
 	ld[1].length = 0;
-	ld[1].phase = 0;
+	memset(ld[1].phase, 0, m_const_freq_n * sizeof(double));
 
 	m_output_sepectrum_length = 0;
 
@@ -139,94 +159,123 @@ void SpectrumAnalyser<FREQ_N, FRAME_SAMPLE_N, FRAME_N>::Clear(){
 	pthread_cond_signal(&m_cond_get);
 }
 
-template <int FREQ_N, int FRAME_SAMPLE_N, int FRAME_N>
-void *SpectrumAnalyser<FREQ_N, FRAME_SAMPLE_N, FRAME_N>::thread_proc(void *pthis){
-	SpectrumAnalyser<FREQ_N, FRAME_SAMPLE_N, FRAME_N> &obj =
-			*reinterpret_cast<SpectrumAnalyser<FREQ_N, FRAME_SAMPLE_N, FRAME_N> *>(pthis);
+template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
+void *SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::thread_proc(void *pthis){
+	SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N> &obj =
+			*reinterpret_cast<SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N> *>(pthis);
 
-	pthread_mutex_lock(&obj.m_mutex_put);
-	pthread_mutex_lock(&obj.m_mutex_get);
+	while (1){
+		pthread_mutex_lock(&obj.m_mutex_put);
+		pthread_mutex_lock(&obj.m_mutex_get);
 
-	if (obj.m_input_pcm[obj.m_input_pcm_index].length == 0)
-		pthread_cond_wait(&obj.m_cond_put, &obj.m_mutex_put);
-	assert(obj.m_input_pcm[obj.m_input_pcm_index].length > 0);
+		if (obj.m_output_sepectrum_length > 0)
+			pthread_cond_wait(&obj.m_cond_get, &obj.m_mutex_get);
+		assert(obj.m_output_sepectrum_length == 0);
 
-	if (obj.m_output_sepectrum_length > 0)
-		pthread_cond_wait(&obj.m_cond_get, &obj.m_mutex_get);
-	assert(obj.m_output_sepectrum_length == 0);
+		if (obj.m_input_pcm_length == 0)
+			pthread_cond_wait(&obj.m_cond_put, &obj.m_mutex_put);
+		assert(obj.m_input_pcm_length > 0);
 
-	obj.Analyse();
+		obj.Analyse();
 
-	assert(obj.m_input_pcm[obj.m_input_pcm_index] = 0);
-	assert(obj.m_output_sepectrum_length > 0);
+		assert(obj.m_input_pcm_length == 0);
+		assert(obj.m_output_sepectrum_length > 0);
 
-	pthread_mutex_unlock(&obj.m_mutex_put);
-	pthread_mutex_unlock(&obj.m_mutex_get);
+		pthread_mutex_unlock(&obj.m_mutex_get);
+		pthread_mutex_unlock(&obj.m_mutex_put);
 
-	pthread_cond_signal(&obj.m_cond_put);
-	pthread_cond_signal(&obj.m_cond_get);
-
+		pthread_cond_signal(&obj.m_cond_get);
+		pthread_cond_signal(&obj.m_cond_put);
+	}
 }
 
-template <int FREQ_N, int FRAME_SAMPLE_N, int FRAME_N>
-void SpectrumAnalyser<FREQ_N, FRAME_SAMPLE_N, FRAME_N>::Analyse(){
-	double *bm_sin[FRAME_N] = ld[ld_index].bm_sin;
-	double *bm_cos[FRAME_N] = ld[ld_index].bm_cos;
+template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
+void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Analyse(){
+	double (*bm_sin)[FRAME_N] = ld[ld_index].bm_sin;
+	double (*bm_cos)[FRAME_N] = ld[ld_index].bm_cos;
 	int length = m_input_pcm_length;
-	int n_frame = length / FRAME_SAMPLE_N;
-	int nc_frame = n_frame / 2;
+	int n_frame = length / m_const_frame_sample_n;
+	int nc_frame = n_frame - m_const_reserve_frame_n;
+	ld[ld_index].length = n_frame;
 
-	struct LD *ld_l = ld[1 - ld_index];
+	struct LD *ld_l = &ld[1 - ld_index];
 
-	double *bm_sin_l[FRAME_N] = ld_l->bm_sin;
-	double *bm_cos_l[FRAME_N] = ld_l->bm_cos;
-	int len_l = ld_l->length;
-	int n_frame_l = len_l / FRAME_SAMPLE_N;
-	int nc_frame_l = n_frame_l / 2;
+	double (*bm_sin_l)[FRAME_N] = ld_l->bm_sin;
+	double (*bm_cos_l)[FRAME_N] = ld_l->bm_cos;
+	int n_frame_l = ld_l->length;
+	assert(n_frame_l >= 0);
 
-	int output_length = nc_frame_l + nc_frame;
+	int output_length, output_start_frame;
+	if (n_frame_l < m_const_reserve_frame_n)
+		output_start_frame = m_const_reserve_frame_n - n_frame_l;
+	else
+		output_start_frame = -m_const_reserve_frame_n;
+	output_length = nc_frame - output_start_frame;
+	assert(output_length <= FRAME_N);
 
-	for (int i_freq = 0; i_freq < FREQ_N; i_freq++){
-		double phase_l = ld_l->phase;
-		double m_sin[FRAME_SAMPLE_N * FRAME_N];
-		double m_cos[FRAME_SAMPLE_N * FRAME_N];
+	for (int i_freq = 0; i_freq < m_const_freq_n; i_freq++){
+		double phase_l = ld_l->phase[i_freq];
+		double m_sin[m_const_frame_sample_n * FRAME_N];
+		double m_cos[m_const_frame_sample_n * FRAME_N];
 		for (int i = 0; i < length; i++){
-			m_sin[i] =
-					m_input_pcm[i] *
-					sin_o[static_cast<int>(
-							(
-								static_cast<double>(i) / m_n_cycle_samples_o[i_freq] + phase_l
-								) * MAX_N_DIV_CIRCLE
-						) % MAX_N_DIV_CIRCLE];
-			m_cos[i] =
-					m_input_pcm[i] *
-					cos_o[static_cast<int>(
-							(
-								static_cast<double>(i) / m_n_cycle_samples_o[i_freq] + phase_l
-								) * MAX_N_DIV_CIRCLE
-						) % MAX_N_DIV_CIRCLE];
+			int phase_index = static_cast<int>(
+								  (
+									  static_cast<double>(i) / m_n_cycle_samples_o[i_freq] + phase_l
+									  ) * MAX_N_DIV_CIRCLE
+							  ) % MAX_N_DIV_CIRCLE;
+			m_sin[i] = m_input_pcm[i] * sin_o[phase_index];
+			m_cos[i] = m_input_pcm[i] * cos_o[phase_index];
 		}
-		ld_l->length = n_frame;
-		ld_l->phase = static_cast<double>(length) / m_n_cycle_samples_o[i_freq] + phase_l;
+		double new_phase = static_cast<double>(length) / m_n_cycle_samples_o[i_freq] + phase_l;
+		new_phase = new_phase - static_cast<int>(new_phase);
+		ld_l->phase[i_freq] = new_phase;
 
 		// Fill all frames
 		for (int i = 0; i < n_frame; i++){
 			double bm_sin_ = 0.0;
 			double bm_cos_ = 0.0;
-			for (int j = 0; j < FRAME_SAMPLE_N; j++){
-				bm_sin_ += m_sin[i*FRAME_SAMPLE_N+j];
-				bm_cos_ += m_cos[i*FRAME_SAMPLE_N+j];
+			for (int j = 0; j < m_const_frame_sample_n; j++){
+				bm_sin_ += m_sin[i*m_const_frame_sample_n+j];
+				bm_cos_ += m_cos[i*m_const_frame_sample_n+j];
 			}
 			bm_sin[i_freq][i] = bm_sin_;
 			bm_cos[i_freq][i] = bm_cos_;
 		}
 
+
+		if (i_freq == DEBUG_I_FREQ && DEBUG_BLOCK == 50){
+			for (int i = -1; i >= -n_frame_l; i--){
+				cout<<ld[1-ld_index].bm_sin[i_freq][i]<<' ';
+			}
+			cout<<endl;
+			for (int i = 0; i < n_frame; i++){
+				cout<<ld[ld_index].bm_sin[i_freq][i]<<' ';
+			}
+			cout<<endl;
+			cout<<endl;
+		}
+
+
+
+		if (i_freq == DEBUG_I_FREQ && DEBUG_BLOCK == 5){
+			for (int i = -1; i >= -n_frame_l; i--){
+				cout<<bm_sin_l[i_freq][i]<<' ';
+			}
+			cout<<endl;
+			for (int i = 0; i < n_frame; i++){
+				cout<<bm_sin[i_freq][i]<<' ';
+			}
+			cout<<endl;
+			cout<<endl;
+		}
+
+
 		// Determine the range of frames for vibration
-		int min_n_b = MIN_WIN_N_VIB * m_n_cycle_samples_o[i_freq] / FRAME_SAMPLE_N;
+		int min_n_b = MIN_WIN_N_VIB * m_n_cycle_samples_o[i_freq] / m_const_frame_sample_n;
 		if (min_n_b < 1) min_n_b = 1;
 		assert(min_n_b <= nc_frame);
 
-		int max_n_b = MAX_WIN_N_VIB * m_n_cycle_samples_o[i_freq] / FRAME_SAMPLE_N;
+		int max_n_b = MAX_WIN_N_VIB * m_n_cycle_samples_o[i_freq] / m_const_frame_sample_n;
 		if (max_n_b > nc_frame) max_n_b = nc_frame;
 		if (max_n_b < 1) max_n_b = 1;
 		assert(min_n_b <= max_n_b);
@@ -234,62 +283,124 @@ void SpectrumAnalyser<FREQ_N, FRAME_SAMPLE_N, FRAME_N>::Analyse(){
 		// Recursive summation
 		double sum_bm_sin_b[FRAME_N*2][FRAME_N];
 		double sum_bm_cos_b[FRAME_N*2][FRAME_N];
-		double *sum_bm_sin[FRAME_N] = sum_bm_sin_b + FRAME_N;
-		double *sum_bm_cos[FRAME_N] = sum_bm_cos_b + FRAME_N;
+		double (*sum_bm_sin)[FRAME_N] = sum_bm_sin_b + FRAME_N;
+		double (*sum_bm_cos)[FRAME_N] = sum_bm_cos_b + FRAME_N;
 		for (int i = 0; i < n_frame; i++){
 			sum_bm_sin[i][0] = bm_sin[i_freq][i];
 			sum_bm_cos[i][0] = bm_cos[i_freq][i];
 		}
 		for (int i = -1; i >= -n_frame_l; i--){
-			sum_bm_sin[i][0] = bm_sin_l[i_freq][n_frame_l - i];
-			sum_bm_cos[i][0] = bm_cos_l[i_freq][n_frame_l - i];
+			sum_bm_sin[i][0] = bm_sin_l[i_freq][n_frame_l + i];
+			sum_bm_cos[i][0] = bm_cos_l[i_freq][n_frame_l + i];
 		}
 		for (int j = 1; j < max_n_b; j++){
-			for (int i = -nc_frame_l; i < n_frame - j; i++){
+			for (int i = -n_frame_l; i < nc_frame; i++){
 				sum_bm_sin[i][j] = sum_bm_sin[i][j-1] + sum_bm_sin[i+j][0];
 				sum_bm_cos[i][j] = sum_bm_cos[i][j-1] + sum_bm_cos[i+j][0];
 			}
 		}
 
+
+		if (i_freq == DEBUG_I_FREQ && DEBUG_BLOCK == 4){
+			for (int i = -n_frame_l; i < nc_frame; i++){
+				cout<<i<<'\t';
+				for (int j = 0; j < max_n_b; j++)
+					cout<<sum_bm_sin[i][j]<<' ';
+				cout<<endl;
+				cout<<i<<'\t';
+				for (int j = 0; j < max_n_b; j++)
+					cout<<sum_bm_cos[i][j]<<' ';
+				cout<<endl;
+			}
+			cout<<endl;
+		}
+
+
 		// Square sum
 		double bm_q_sum_b[FRAME_N*2][FRAME_N];
-		double *bm_q_sum[FRAME_N];
+		double (*bm_q_sum)[FRAME_N] = bm_q_sum_b + FRAME_N;
 		for (int j = 0; j < max_n_b; j++){
-			for (int i = -nc_frame_l; i < n_frame - j; i++){
+			for (int i = -n_frame_l; i < nc_frame; i++){
 				double sum_bm_sin_ = sum_bm_sin[i][j];
 				double sum_bm_cos_ = sum_bm_cos[i][j];
 				bm_q_sum[i][j] = sum_bm_sin_ * sum_bm_sin_ + sum_bm_cos_ * sum_bm_cos_;
 			}
 		}
 
-		// TODO
-		// Find the maximum value of the convolution result under small window movement
-		double max_bm_q_sum[FRAME_N][FRAME_N];
-		for (int j = min_n_b; j <= max_n_b; j++){
-			for (int i = 0; i < output_length; i++){
 
+		if (i_freq == DEBUG_I_FREQ && DEBUG_BLOCK == 3){
+			for (int i = -n_frame_l; i < nc_frame; i++){
+				cout<<i<<'\t';
+				for (int j = 0; j < max_n_b; j++)
+					cout<<bm_q_sum[i][j]<<' ';
+				cout<<endl;
 			}
-			double max_mq = 0.0;
-			for (int i = -j; i <= 0; i++){
-				if (bm_q_sum[i][j] > max_mq)
-					max_mq = bm_q_sum[i][j];
-			}
-			max_bm_q_sum[j] = max_mq;
+			cout<<endl;
 		}
 
+
+		// Find the maximum value of the convolution result under small window movement
+		double max_bm_q_sum[FRAME_N][FRAME_N];
+		for (int j = min_n_b - 1; j < max_n_b; j++){
+			for (int i = output_start_frame; i < nc_frame; i++){
+				double max_mq = 0.0;
+				for (int k = i - j; k <= i; k++){
+					if (bm_q_sum[k][j] > max_mq)
+						max_mq = bm_q_sum[k][j];
+				}
+				max_bm_q_sum[i-output_start_frame][j] = max_mq;
+			}
+		}
+
+
+		if (i_freq == DEBUG_I_FREQ && DEBUG_BLOCK == 2){
+			for (int i = output_start_frame; i < nc_frame; i++){
+				cout<<i<<'\t';
+				for (int j = min_n_b - 1; j < max_n_b; j++)
+					cout<<max_bm_q_sum[i-output_start_frame][j]<<' ';
+				cout<<endl;
+			}
+			cout<<endl;
+		}
+
+
 		// Calculate the amplitude corresponding to the frequency
-		double v_freq_a[FRAME_N];
-		for (int j = min_n_b; j <= max_n_b; j++)
-			v_freq_a[j] = sqrt(max_bm_q_sum[j]) / (j * FRAME_SAMPLE_N / 2);
+		double v_freq_a[FRAME_N][FRAME_N];
+		for (int j = min_n_b - 1; j < max_n_b; j++)
+			for (int i = 0; i < output_length; i++)
+				v_freq_a[i][j] = sqrt(max_bm_q_sum[i][j]) * 2 / ((j + 1) * m_const_frame_sample_n);
+
+
+		if (i_freq == DEBUG_I_FREQ && DEBUG_BLOCK == 1){
+			for (int i = 0; i < output_length; i++){
+				cout<<i<<'\t';
+				for (int j = min_n_b - 1; j < max_n_b; j++)
+					cout<<v_freq_a[i][j]<<' ';
+				cout<<endl;
+			}
+			cout<<endl;
+		}
+
 
 		// With minimal results as the end result
-		double v_freq = 0.0;
-		for (int j = min_n_b; j <= max_n_b; j++)
-			if (v_freq_a[j] > v_freq)
-				v_freq = v_freq_a[j];
+		for (int i = 0; i < output_length; i++){
+			double v_freq = 0.0;
+			for (int j = min_n_b - 1; j < max_n_b; j++)
+				if (v_freq_a[i][j] > v_freq)
+					v_freq = v_freq_a[i][j];
+			m_output_sepectrum[i][i_freq] = v_freq;
+		}
 
-		//m_output_sepectrum
+
+		if (i_freq == DEBUG_I_FREQ && DEBUG_BLOCK == 0){
+			for (int i = 0; i < output_length; i++)
+				cout<<m_output_sepectrum[i][i_freq]<<endl;
+		}
+
+
 	}
+	m_output_sepectrum_length = output_length;
+	m_input_pcm_length = 0;
 	ld_index = 1 - ld_index;
 }
 

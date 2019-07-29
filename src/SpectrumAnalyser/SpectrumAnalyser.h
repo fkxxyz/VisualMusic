@@ -3,37 +3,45 @@
 #include <pthread.h>
 #include "constants.h"
 
-template <int FREQ_N, int FRAME_SAMPLE_N, int FRAME_N>
+template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
 class SpectrumAnalyser {
 public:
-	SpectrumAnalyser(const double freqs[FREQ_N], const double sample_rate, const int time_slice_div);
+	SpectrumAnalyser();
 	~SpectrumAnalyser();
 
 	bool TurnOn();
 	void TurnOff();
 
+	void SetArguments(
+			const double *freqs,
+			const int freq_n,
+			const double sample_rate,
+			const int frame_sample_n
+			);
+
 	void Put(double *pcm, int length);
-	int Get(double *sepectrum[FREQ_N]);
+	int Get(double (*sepectrum)[MAX_FREQ_N]);
+	int GetCountOfReserveFrame() const;
 
 	void Clear();
 
 protected:
-	const double m_const_sample_rate;
-	const double m_const_freqs[FREQ_N];
-	const double m_const_time_slice_div;
+	int m_const_frame_sample_n;
+	int m_const_freq_n;
+	int m_const_reserve_frame_n;
 
-	double m_input_pcm[FRAME_SAMPLE_N * FRAME_N];
+	double m_input_pcm[MAX_FRAME_SAMPLE_N * FRAME_N];
 	int m_input_pcm_length;
 
 	struct LD {
 		int length;
-		double phase;
-		double bm_sin[FREQ_N][FRAME_N];
-		double bm_cos[FREQ_N][FRAME_N];
+		double phase[MAX_FREQ_N];
+		double bm_sin[MAX_FREQ_N][FRAME_N];
+		double bm_cos[MAX_FREQ_N][FRAME_N];
 	} ld[2];
 	int ld_index;
 
-	double m_output_sepectrum[FRAME_N][FREQ_N];
+	double m_output_sepectrum[FRAME_N][MAX_FREQ_N];
 	int m_output_sepectrum_length;
 
 	pthread_t m_thread;
@@ -45,7 +53,7 @@ protected:
 
 protected:
 	double *sin_o, *cos_o;
-	double m_n_cycle_samples_o[FREQ_N];
+	double m_n_cycle_samples_o[MAX_FREQ_N];
 };
 
 #include "SpectrumAnalyser.inl"

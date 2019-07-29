@@ -3,6 +3,29 @@
 #include <mad.h>
 
 
+template <class dest_type>
+inline void PCMScaler::Scale(dest_type *dest, void *src, size_t length, BaseAudioDecoder::sample_type sample_type){
+	switch (sample_type){
+	case BaseAudioDecoder::st_uchar:
+		Scale(dest, static_cast<unsigned char *>(src), length);
+		return;
+	case BaseAudioDecoder::st_short:
+		Scale(dest, static_cast<short *>(src), length);
+		return;
+	case BaseAudioDecoder::st_int:
+		Scale(dest, static_cast<int *>(src), length);
+		return;
+	case BaseAudioDecoder::st_float:
+		Scale(dest, static_cast<float *>(src), length);
+		return;
+	case BaseAudioDecoder::st_double:
+		Scale(dest, static_cast<double *>(src), length);
+		return;
+	default:
+		assert(0);
+	}
+}
+
 inline void PCMScaler::Scale(unsigned char *dest, mad_fixed_t *src, size_t length){
 	const mad_fixed_t sgn_bit_flag = static_cast<const mad_fixed_t>(1L << (sizeof(mad_fixed_t) * 8 - 1));
 	for (size_t i = 0; i < length; i++){

@@ -1,8 +1,10 @@
 
 #include "stdafx.h"
 #include "wxVisualMusicFrame.h"
-#include <wx/file.h>
 #include "constants.h"
+
+#include <wx/file.h>
+#include <wx/dcbuffer.h>
 
 enum wxID
 {
@@ -14,6 +16,9 @@ enum wxID
 
 	wxID_VIEW_BAR,
 	wxID_VIEW_2D,
+
+	wxID_TIMER,
+	wxID_TIMER_FPS
 };
 
 wxBEGIN_EVENT_TABLE(wxVisualMusicFrame, wxFrame)
@@ -21,10 +26,19 @@ wxBEGIN_EVENT_TABLE(wxVisualMusicFrame, wxFrame)
 	EVT_MENU(wxID_EXIT,  wxVisualMusicFrame::OnExit)
 	EVT_MENU(wxID_ABOUT, wxVisualMusicFrame::OnAbout)
 	EVT_PAINT(wxVisualMusicFrame::OnPaint)
+	EVT_TIMER(wxID_TIMER, wxVisualMusicFrame::OnTimer)
+	EVT_TIMER(wxID_TIMER_FPS, wxVisualMusicFrame::OnTimerFPS)
 wxEND_EVENT_TABLE()
 
-wxVisualMusicFrame::wxVisualMusicFrame(const wxString& title, const wxPoint& pos, const wxSize& size)
-	:wxFrame(NULL, wxID_ANY, title, pos, size)
+wxVisualMusicFrame::wxVisualMusicFrame(
+		const wxString& title,
+		const wxPoint& pos,
+		const wxSize& size
+		):
+	wxFrame(nullptr, wxID_ANY, title, pos, size),
+	m_fps(0),
+	m_timer(this, wxID_TIMER),
+	m_timer_fps(this, wxID_TIMER_FPS)
 {
 	wxMenu *menuFile = new wxMenu;
 	menuFile->Append(wxID_OPEN);
@@ -56,9 +70,9 @@ wxVisualMusicFrame::wxVisualMusicFrame(const wxString& title, const wxPoint& pos
 
 	SetClientSize(
 				VIEW_FREQ_PIXEL_WIDTH * N_FREQ,
-				VIEW_TIME_PIXEL_HEIGHT * N_TIME + VIEW_CONTROL_SPACING + VIEW_BUTTON_HEIGHT + VIEW_CONTROL_SPACING
+				VIEW_TIME_PIXEL_HEIGHT * N_TIME //+ VIEW_CONTROL_SPACING + VIEW_BUTTON_HEIGHT + VIEW_CONTROL_SPACING
 			);
-
+/*
 	wxPanel* panel = new wxPanel(this);
 	wxButton *buttonPlay = new wxButton(
 							   panel,
@@ -71,6 +85,16 @@ wxVisualMusicFrame::wxVisualMusicFrame(const wxString& title, const wxPoint& pos
 							   wxSize(VIEW_BUTTON_HEIGHT, VIEW_BUTTON_HEIGHT)
 							   );
 
+*/
+
+	m_timer.Start(16);
+	m_timer_fps.Start(1000);
+
+	m_ColorArray = new color_t[(VIEW_FREQ_PIXEL_WIDTH * N_FREQ) * (VIEW_TIME_PIXEL_HEIGHT * N_TIME)];
+}
+
+wxVisualMusicFrame::~wxVisualMusicFrame(){
+	delete[] m_ColorArray;
 }
 
 void wxVisualMusicFrame::OnOpen(wxCommandEvent& event){
@@ -85,7 +109,8 @@ void wxVisualMusicFrame::OnOpen(wxCommandEvent& event){
 	if (dialog.ShowModal() == wxID_CANCEL)
 		return;
 
-	//m_file_decoder.Run(static_cast<const char*>(dialog.GetPath()));
+	m_controller.StartAllThread(static_cast<const char *>(dialog.GetPath()));
+	m_controller.OpenWavePlayer();
 }
 
 void wxVisualMusicFrame::OnExit(wxCommandEvent& event){
@@ -97,8 +122,36 @@ void wxVisualMusicFrame::OnAbout(wxCommandEvent& event){
 					  "About Hello World", wxOK | wxICON_INFORMATION );
 }
 
-void wxVisualMusicFrame::OnPaint(wxPaintEvent& event){
 
+void wxVisualMusicFrame::OnPaint(wxPaintEvent& event){
+	DrawTemplate draw(
+				m_ColorArray,
+				VIEW_FREQ_PIXEL_WIDTH * N_FREQ,
+				VIEW_TIME_PIXEL_HEIGHT * N_TIME,
+				VisualMusicController::draw,
+				&m_controller
+				);
+
+	wxBufferedPaintDC dc(this);
+	wxImage image(
+				VIEW_FREQ_PIXEL_WIDTH * N_FREQ,
+				VIEW_TIME_PIXEL_HEIGHT * N_TIME,
+				reinterpret_cast<unsigned char *>(m_ColorArray),
+				true
+				);
+	wxBitmap bitmap(image);
+	dc.DrawBitmap(bitmap, 0, 0);
+
+	m_fps++;
+}
+
+void wxVisualMusicFrame::OnTimer(wxTimerEvent& event){
+	Refresh();
+}
+
+void wxVisualMusicFrame::OnTimerFPS(wxTimerEvent& event){
+	SetStatusText(wxString::Format("FPS %d", m_fps));
+	m_fps = 0;
 }
 
 

@@ -25,6 +25,7 @@ protected:
 	bool m_clean_flag;
 	bool m_end_flag;
 
+	void Skip(size_t length);
 	void ReadTo(DATATYPE *data, size_t length);
 	void WriteIn(DATATYPE *data, size_t length);
 };
