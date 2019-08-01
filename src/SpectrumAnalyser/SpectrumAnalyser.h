@@ -24,6 +24,7 @@ public:
 	int GetCountOfReserveFrame() const;
 
 	void Clear();
+	void NotifyEnd();
 
 protected:
 	int m_const_frame_sample_n;
@@ -50,6 +51,8 @@ protected:
 
 	pthread_cond_t m_cond_put, m_cond_get;
 	pthread_mutex_t m_mutex_put, m_mutex_get;
+
+	bool m_end_flag;
 
 protected:
 	double *sin_o, *cos_o;

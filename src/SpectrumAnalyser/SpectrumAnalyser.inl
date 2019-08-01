@@ -101,9 +101,10 @@ void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Put(double *pcm,
 
 	pthread_mutex_lock(&m_mutex_put);
 
-	if (m_input_pcm_length)
+	while (m_input_pcm_length)
 		pthread_cond_wait(&m_cond_put, &m_mutex_put);
-	assert(m_input_pcm_length == 0);
+
+	m_end_flag = false;
 
 	memcpy(m_input_pcm, pcm, length * sizeof(double));
 	m_input_pcm_length = length;
@@ -120,9 +121,13 @@ int SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Get(double (*sepe
 
 	pthread_mutex_lock(&m_mutex_get);
 
-	if (m_output_sepectrum_length == 0)
+	while (m_output_sepectrum_length == 0){
+		if (m_end_flag){
+			pthread_mutex_unlock(&m_mutex_get);
+			return 0;
+		}
 		pthread_cond_wait(&m_cond_get, &m_mutex_get);
-	assert(m_output_sepectrum_length > 0);
+	}
 
 	int length = m_output_sepectrum_length;
 
@@ -156,6 +161,12 @@ void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Clear(){
 	pthread_mutex_unlock(&m_mutex_put);
 	pthread_mutex_unlock(&m_mutex_get);
 
+	pthread_cond_signal(&m_cond_get);
+}
+
+template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
+void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::NotifyEnd(){
+	m_end_flag = true;
 	pthread_cond_signal(&m_cond_get);
 }
 

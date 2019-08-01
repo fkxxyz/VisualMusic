@@ -8,11 +8,11 @@ class BasePipe {
 public:
 	BasePipe();
 
-	size_t Read(DATATYPE *data, size_t read_min_length, size_t read_max_length);
-	size_t Write(DATATYPE *data, size_t write_length);
+	virtual size_t Read(DATATYPE *data, size_t read_min_length, size_t read_max_length);
+	virtual size_t Write(DATATYPE *data, size_t write_length);
 	virtual void Clear();
 	virtual void NotifyEnd();
-	size_t GetLength() const;
+	virtual size_t GetLength() const;
 
 protected:
 	DATATYPE m_data[BUFFER_LEN];

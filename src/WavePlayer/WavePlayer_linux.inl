@@ -197,13 +197,14 @@ inline enum WavePlayer::status WavePlayer::GetStatus(){
 inline bool WavePlayer::Pause(){
 	assert(GetStatus() == st_playing);
 	snd_pcm_t *handle = reinterpret_cast<snd_pcm_t *>(m_handle);
-	return snd_pcm_wait(handle, -1) == 0;
+	return snd_pcm_pause(handle, 1) == 0;
 }
 
 inline bool WavePlayer::Resume(){
 	assert(GetStatus() == st_pause);
 	snd_pcm_t *handle = reinterpret_cast<snd_pcm_t *>(m_handle);
-	return snd_pcm_resume(handle) == 0;
+	return snd_pcm_pause(handle, 0) == 0;
+	//return snd_pcm_resume(handle) == 0;
 }
 
 inline bool WavePlayer::Stop(){

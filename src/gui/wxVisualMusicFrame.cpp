@@ -28,6 +28,8 @@ wxBEGIN_EVENT_TABLE(wxVisualMusicFrame, wxFrame)
 	EVT_PAINT(wxVisualMusicFrame::OnPaint)
 	EVT_TIMER(wxID_TIMER, wxVisualMusicFrame::OnTimer)
 	EVT_TIMER(wxID_TIMER_FPS, wxVisualMusicFrame::OnTimerFPS)
+	EVT_MENU(wxID_PLAYER_PLAY_PAUSE, wxVisualMusicFrame::OnPlay)
+	EVT_MENU(wxID_PLAYER_STOP, wxVisualMusicFrame::OnStop)
 wxEND_EVENT_TABLE()
 
 wxVisualMusicFrame::wxVisualMusicFrame(
@@ -109,17 +111,26 @@ void wxVisualMusicFrame::OnOpen(wxCommandEvent& event){
 	if (dialog.ShowModal() == wxID_CANCEL)
 		return;
 
-	m_controller.StartAllThread(static_cast<const char *>(dialog.GetPath()));
-	m_controller.OpenWavePlayer();
+	m_controller.OpenFile(static_cast<const char *>(dialog.GetPath()));
+	m_controller.Play();
 }
 
 void wxVisualMusicFrame::OnExit(wxCommandEvent& event){
 	Close(true);
 
 }
+
 void wxVisualMusicFrame::OnAbout(wxCommandEvent& event){
 	wxMessageBox( "This is a wxWidgets' Hello world sample",
 					  "About Hello World", wxOK | wxICON_INFORMATION );
+}
+
+void wxVisualMusicFrame::OnPlay(wxCommandEvent& event){
+	m_controller.PlayPause();
+}
+
+void wxVisualMusicFrame::OnStop(wxCommandEvent& event){
+	m_controller.Stop();
 }
 
 

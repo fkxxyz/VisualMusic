@@ -16,6 +16,10 @@ protected:
 	void OnOpen(wxCommandEvent &event);
 	void OnExit(wxCommandEvent &event);
 	void OnAbout(wxCommandEvent &event);
+
+	void OnPlay(wxCommandEvent &event);
+	void OnStop(wxCommandEvent &event);
+
 	void OnPaint(wxPaintEvent &event);
 	void OnTimer(wxTimerEvent& event);
 	void OnTimerFPS(wxTimerEvent& event);

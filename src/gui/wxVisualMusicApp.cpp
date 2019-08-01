@@ -18,7 +18,6 @@ bool wxVisualMusicApp::OnInit(){
 
 
 
-/*
 #include <iostream>
 using namespace std;
 #include "WavePlayer/WavePlayer.h"
@@ -29,10 +28,11 @@ using namespace std;
 #define freq 4000
 #define t 1
 
+/*
 int main(){
 	VisualMusicController control;
-	control.StartAllThread("/home/qaz/Music/CloudMusic/Diana Boncheva - Beethoven Virus.mp3");
-	control.OpenWavePlayer();
+	control.OpenFile("/home/qaz/Music/CloudMusic/Diana Boncheva - Beethoven Virus.mp3");
+	control.Play();
 	sleep(100000);
 	return 0;
 }
