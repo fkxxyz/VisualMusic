@@ -22,7 +22,7 @@ public:
 	bool PlayPause();
 	bool Stop();
 
-	bool SetPos(size_t milliseconds);
+	bool SetPos(int milliseconds);
 
 	static void draw(void *pthis, DrawTemplate *pdraw);
 
@@ -59,6 +59,8 @@ protected:
 
 	int spectrum_time_stamp;
 
+	pthread_mutex_t m_mutex_loop;
+
 	sem_t m_sem_start;
 	bool m_stop_flag;
 };
@@ -71,6 +73,7 @@ protected:
 inline VisualMusicController::VisualMusicController()
 {
 	sem_init(&m_sem_start, 0, 0);
+	pthread_mutex_init(&m_mutex_loop, nullptr);
 
 	generate_all_freq();
 
@@ -204,13 +207,14 @@ inline bool VisualMusicController::PlayPause(){
 }
 
 inline bool VisualMusicController::Stop(){
-	while (sem_trywait(&m_sem_start))
+	while (!sem_trywait(&m_sem_start))
 		;
 	m_stop_flag = true;
 	return true;
 }
 
-inline bool VisualMusicController::SetPos(size_t milliseconds){
+inline bool VisualMusicController::SetPos(int milliseconds){
+	return m_decoder.SetPos(milliseconds);
 }
 
 inline void *VisualMusicController::thread_forking_proc(void *pthis){
@@ -246,8 +250,6 @@ inline void *VisualMusicController::forking(){
 
 		spectrum_time_stamp = m_analyser.GetCountOfReserveFrame();
 
-		m_analyser.TurnOn();
-
 		while (1){
 			// Read pcm from pcm pipe
 			unsigned char pcm_data_buffer[MAX_READ_N_SAMPLE * sizeof(double) * 2];
@@ -257,10 +259,15 @@ inline void *VisualMusicController::forking(){
 									length * channers * sample_size
 									);
 			if (m_stop_flag){
-				m_pipe_play_pcm.Clear();
-				m_pipe_spectrum.Clear();
-				m_player.Stop();
+				m_player.Pause();
 				m_analyser.Clear();
+				cout<<"m_analyser clear."<<endl;
+				m_pipe_spectrum.Clear();
+				cout<<"m_pipe_spectrum clear."<<endl;
+				m_pipe_play_pcm.Clear();
+				cout<<"m_pipe_play_pcm clear."<<endl;
+				m_player.Stop();
+				m_decoder.SetPos(0);
 				break;
 			}
 			if (read_count < length * channers * sample_size){
@@ -376,7 +383,7 @@ inline void *VisualMusicController::put_spectrum(){
 			if (!frames)
 				break;
 
-			//cout<<"get  "<<frames<<" frames."<<endl;
+			cout<<"m_analyser get "<<frames<<" frames."<<endl;
 
 			// Put into the pipe for drawing.
 			m_pipe_spectrum.Write(spectrum, static_cast<size_t>(frames));
@@ -427,6 +434,8 @@ inline void VisualMusicController::draw(void *pthis, DrawTemplate *pdraw){
 										 obj.m_player.GetPos()
 										 ) / obj.m_decoder.GetSampleRate() * FRAME_RATE
 									 );
+		cout<<current_time_stamp<<endl;
+
 		if (current_time_stamp <= obj.spectrum_time_stamp)
 			return;
 

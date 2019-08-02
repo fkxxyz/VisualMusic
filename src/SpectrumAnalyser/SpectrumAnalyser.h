@@ -9,9 +9,6 @@ public:
 	SpectrumAnalyser();
 	~SpectrumAnalyser();
 
-	bool TurnOn();
-	void TurnOff();
-
 	void SetArguments(
 			const double *freqs,
 			const int freq_n,
@@ -53,6 +50,9 @@ protected:
 	pthread_mutex_t m_mutex_put, m_mutex_get;
 
 	bool m_end_flag;
+
+	bool m_clear_flag;
+	void clear();
 
 protected:
 	double *sin_o, *cos_o;

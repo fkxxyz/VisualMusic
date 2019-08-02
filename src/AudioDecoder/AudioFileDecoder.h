@@ -10,6 +10,7 @@ public:
 	AudioFileDecoder();
 	bool Run(const char *file_path);
 	void Stop();
+	bool SetPos(int milliseconds);
 	BasePipe<unsigned char, OUTPUT_PCM_BUFFER_LEN> *GetPCMPipe();
 
 	unsigned int GetChanners() const { assert (m_current_decoder); return m_current_decoder->GetChanners();}

@@ -94,6 +94,22 @@ void AudioFileDecoder::Stop(){
 	assert(!m_current_decoder);
 }
 
+bool AudioFileDecoder::SetPos(int milliseconds){
+	assert(m_ifs);
+	assert(*m_ifs);
+
+	m_ifs->seekg(static_cast<long>(
+				m_current_decoder->GetDataStart() +
+				static_cast<unsigned long>(
+						 milliseconds
+					) * (m_current_decoder->GetBitrate() / 8) / 1000
+				));
+
+	if (m_input_rawdata_pipe.GetLength())
+		m_input_rawdata_pipe.Clear();
+	return m_ifs->good();
+}
+
 void *AudioFileDecoder::thread_file_read_proc(void *pthis){
 	AudioFileDecoder &obj = *reinterpret_cast<AudioFileDecoder *>(pthis);
 

@@ -43,6 +43,7 @@ mad_flow Mp3Decoder::mad_input_func(void *data, struct mad_stream *stream){
 					   );
 
 	mad_stream_buffer(stream, mp3_decoder.m_read_buffer, rem_size + count);
+	mp3_decoder.m_set_pos = false;
 
 	if (count == 0)
 		return MAD_FLOW_STOP;
@@ -54,19 +55,24 @@ mad_flow Mp3Decoder::mad_header_func(void *, struct mad_header const *){
 	return MAD_FLOW_CONTINUE;
 }
 
-mad_flow Mp3Decoder::mad_output_func(void *data, struct mad_header const *, struct mad_pcm *pcm){
+mad_flow Mp3Decoder::mad_output_func(void *data, struct mad_header const *header, struct mad_pcm *pcm){
 	Mp3Decoder &mp3_decoder = *reinterpret_cast<Mp3Decoder *>(data);
 
 	assert(pcm->channels == 1 || pcm->channels == 2);
 
 	if (mp3_decoder.m_stop_flag)
 		return MAD_FLOW_STOP;
+	if (mp3_decoder.m_set_pos)
+		return MAD_FLOW_CONTINUE;
 
 	if (mp3_decoder.m_channels == 0){
 		mp3_decoder.m_channels = pcm->channels;
 		mp3_decoder.m_sample_rate = pcm->samplerate;
 		mp3_decoder.m_sizeof_sample = sizeof(int);
 		mp3_decoder.m_typeof_sample = st_int;
+
+		mp3_decoder.m_data_start = 0;
+		mp3_decoder.m_bitrate = header->bitrate;
 
 		sem_post(mp3_decoder.m_sem_meta_read);
 	}

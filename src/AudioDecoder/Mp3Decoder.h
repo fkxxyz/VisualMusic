@@ -10,7 +10,6 @@ public:
 			BasePipe<unsigned char, OUTPUT_PCM_BUFFER_LEN> *output_pcm_pipe,
 			sem_t *sem
 			);
-	void stop();
 protected:
 	static mad_flow mad_input_func(void *data, struct mad_stream *stream);
 	static mad_flow mad_header_func(void *data, struct mad_header const *header);

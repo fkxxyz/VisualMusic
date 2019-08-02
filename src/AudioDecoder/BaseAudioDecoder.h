@@ -16,6 +16,7 @@ public:
 			sem_t *sem  // Notify after reading audio metadata
 			) = 0;
 	void stop();
+	void notify_set_pos();
 
 	BaseAudioDecoder();
 	virtual ~BaseAudioDecoder();
@@ -34,6 +35,9 @@ public:
 	size_t GetSizeofSample() const { assert (m_channels); return m_sizeof_sample;}
 	enum sample_type GetTypeofSample() const { assert (m_channels); return m_typeof_sample;}
 
+	size_t GetDataStart() const { return m_data_start;}
+	unsigned long GetBitrate() const { assert (m_bitrate); return m_bitrate;}
+
 protected:
 	BasePipe<unsigned char, INPUT_RAWDATA_BUFFER_LEN> *m_input_rawdata_pipe;
 	BasePipe<unsigned char, OUTPUT_PCM_BUFFER_LEN> *m_output_pcm_pipe;
@@ -43,11 +47,18 @@ protected:
 	size_t m_sizeof_sample;
 	enum sample_type m_typeof_sample;
 
-	bool m_stop_flag;
+	size_t m_data_start;
+	unsigned long m_bitrate;
+
+	bool m_stop_flag, m_set_pos;
 };
 
 inline void BaseAudioDecoder::stop(){
 	m_stop_flag = true;
+}
+
+inline void BaseAudioDecoder::notify_set_pos(){
+	m_set_pos = true;
 }
 
 

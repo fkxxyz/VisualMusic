@@ -183,7 +183,7 @@ inline enum WavePlayer::status WavePlayer::GetStatus(){
 	snd_pcm_t *handle = reinterpret_cast<snd_pcm_t *>(m_handle);
 	snd_pcm_state_t state = snd_pcm_state(handle);
 	switch (state){
-	case SND_PCM_STATE_OPEN: case SND_PCM_STATE_PREPARED: case SND_PCM_STATE_XRUN:
+	case SND_PCM_STATE_OPEN: case SND_PCM_STATE_PREPARED: case SND_PCM_STATE_XRUN: case SND_PCM_STATE_SETUP:
 		return st_opened;
 	case SND_PCM_STATE_RUNNING:
 		return st_playing;
@@ -208,10 +208,17 @@ inline bool WavePlayer::Resume(){
 }
 
 inline bool WavePlayer::Stop(){
-	assert(GetStatus() == st_playing);
+	enum status status = GetStatus();
+	assert(status == st_playing || status == st_pause);
+
 	snd_pcm_t *handle = reinterpret_cast<snd_pcm_t *>(m_handle);
+	WavePlayer_linux::pdata_t *pdata = reinterpret_cast<WavePlayer_linux::pdata_t *>(m_pdata);
+
 	if (snd_pcm_drop(handle) != 0)
 		return false;
+	pdata->written = 0;
+	pdata->last_pos = 0;
+	pdata->last_pos_us = WavePlayer_linux::get_current_us();
 	return snd_pcm_prepare(handle) == 0;
 }
 

@@ -26,23 +26,14 @@ SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::SpectrumAnalyser()
 		cos_o[i] = cos(angle);
 		sin_o[i] = sin(angle);
 	}
+
+	if (pthread_create(&m_thread, nullptr, thread_proc, this))
+		assert(0);
 }
 
 template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
 SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::~SpectrumAnalyser(){
 	delete[] sin_o;
-}
-
-
-template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
-bool SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::TurnOn(){
-	if (pthread_create(&m_thread, nullptr, thread_proc, this))
-		return false;
-}
-
-template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
-void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::TurnOff(){
-
 }
 
 template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
@@ -54,18 +45,12 @@ void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::SetArguments(
 		)
 {
 
-	pthread_mutex_lock(&m_mutex_put);
-	pthread_mutex_lock(&m_mutex_get);
+	Clear();
 
 	m_const_frame_sample_n = frame_sample_n;
 	assert(m_const_frame_sample_n <= MAX_FRAME_SAMPLE_N);
 
 	m_const_freq_n = freq_n;
-
-	pthread_mutex_unlock(&m_mutex_put);
-	pthread_mutex_unlock(&m_mutex_get);
-
-	Clear();
 
 	// Make sure the frequency array is strictly increasing.
 	for (int i = 0; i < m_const_freq_n - 1; i++)
@@ -101,10 +86,16 @@ void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Put(double *pcm,
 
 	pthread_mutex_lock(&m_mutex_put);
 
-	while (m_input_pcm_length)
+	while (m_input_pcm_length){
 		pthread_cond_wait(&m_cond_put, &m_mutex_put);
+		if (m_clear_flag){
+			clear();
+			return;
+		}
+	}
 
 	m_end_flag = false;
+	m_clear_flag = false;
 
 	memcpy(m_input_pcm, pcm, length * sizeof(double));
 	m_input_pcm_length = length;
@@ -119,6 +110,9 @@ template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
 int SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Get(double (*sepectrum)[MAX_FREQ_N]){
 	assert(sepectrum);
 
+	if (m_clear_flag)
+		return 0;
+
 	pthread_mutex_lock(&m_mutex_get);
 
 	while (m_output_sepectrum_length == 0){
@@ -127,6 +121,10 @@ int SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Get(double (*sepe
 			return 0;
 		}
 		pthread_cond_wait(&m_cond_get, &m_mutex_get);
+		if (m_clear_flag){
+			clear();
+			return 0;
+		}
 	}
 
 	int length = m_output_sepectrum_length;
@@ -144,9 +142,14 @@ int SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Get(double (*sepe
 
 template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
 void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Clear(){
-	pthread_mutex_lock(&m_mutex_put);
-	pthread_mutex_lock(&m_mutex_get);
+	m_clear_flag = true;
 
+	pthread_cond_signal(&m_cond_put);
+	pthread_cond_signal(&m_cond_get);
+}
+
+template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
+void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::clear(){
 	ld_index = 0;
 
 	m_input_pcm_length = 0;
@@ -157,17 +160,13 @@ void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Clear(){
 	memset(ld[1].phase, 0, m_const_freq_n * sizeof(double));
 
 	m_output_sepectrum_length = 0;
-
-	pthread_mutex_unlock(&m_mutex_put);
-	pthread_mutex_unlock(&m_mutex_get);
-
-	pthread_cond_signal(&m_cond_get);
 }
 
 template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
 void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::NotifyEnd(){
 	m_end_flag = true;
 	pthread_cond_signal(&m_cond_get);
+	pthread_cond_signal(&m_cond_put);
 }
 
 template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
@@ -179,18 +178,24 @@ void *SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::thread_proc(voi
 		pthread_mutex_lock(&obj.m_mutex_put);
 		pthread_mutex_lock(&obj.m_mutex_get);
 
-		if (obj.m_output_sepectrum_length > 0)
+		while (obj.m_output_sepectrum_length > 0){
 			pthread_cond_wait(&obj.m_cond_get, &obj.m_mutex_get);
-		assert(obj.m_output_sepectrum_length == 0);
+			if (obj.m_clear_flag)
+				obj.clear();
+		}
 
-		if (obj.m_input_pcm_length == 0)
+		while (obj.m_input_pcm_length == 0){
 			pthread_cond_wait(&obj.m_cond_put, &obj.m_mutex_put);
-		assert(obj.m_input_pcm_length > 0);
+			if (obj.m_clear_flag)
+				obj.clear();
+		}
 
 		obj.Analyse();
 
-		assert(obj.m_input_pcm_length == 0);
-		assert(obj.m_output_sepectrum_length > 0);
+		if (!obj.m_clear_flag){
+			assert(obj.m_input_pcm_length == 0);
+			assert(obj.m_output_sepectrum_length > 0);
+		}
 
 		pthread_mutex_unlock(&obj.m_mutex_get);
 		pthread_mutex_unlock(&obj.m_mutex_put);
@@ -225,6 +230,9 @@ void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Analyse(){
 	assert(output_length <= FRAME_N);
 
 	for (int i_freq = 0; i_freq < m_const_freq_n; i_freq++){
+		if (m_clear_flag)
+			break;
+
 		double phase_l = ld_l->phase[i_freq];
 		double m_sin[m_const_frame_sample_n * FRAME_N];
 		double m_cos[m_const_frame_sample_n * FRAME_N];
