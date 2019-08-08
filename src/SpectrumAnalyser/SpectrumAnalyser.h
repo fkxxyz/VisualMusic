@@ -1,6 +1,6 @@
 #pragma once
 #include "stdafx.h"
-#include <pthread.h>
+#include "thread/thread.h"
 #include "constants.h"
 
 template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
@@ -42,12 +42,12 @@ protected:
 	double m_output_sepectrum[FRAME_N][MAX_FREQ_N];
 	int m_output_sepectrum_length;
 
-	pthread_t m_thread;
+	thread_t m_thread;
 	static void *thread_proc(void *pthis);
 	void Analyse();
 
-	pthread_cond_t m_cond_put, m_cond_get;
-	pthread_mutex_t m_mutex_put, m_mutex_get;
+	cond_t m_cond_put, m_cond_get;
+	mutex_t m_mutex_put, m_mutex_get;
 
 	bool m_end_flag;
 

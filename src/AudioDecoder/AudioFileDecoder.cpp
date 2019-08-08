@@ -34,27 +34,17 @@ bool AudioFileDecoder::Run(const char *file_path){
 		goto fail_closefile;
 
 	// Create file reading thread.
-	if (pthread_create(&m_thread_file_read, nullptr, thread_file_read_proc, this))
+	if (!m_thread_file_read.start(thread_file_read_proc, this))
 		goto fail_closefile;
 
 	// Create decoding thread.
 	{
-		if (sem_init(&m_sem_meta_nodify, 0, 0)){
+		if (!m_thread_decode.start(thread_decode_proc, this))
+			goto fail_closefile;
+
+		if (!m_event_meta_nodify.wait()){
 			assert(0);
 			goto fail_closefile;
-		}
-
-		if (pthread_create(&m_thread_decode, nullptr, thread_decode_proc, this))
-			goto fail_destory_sem;
-
-		if (sem_wait(&m_sem_meta_nodify)){
-			assert(0);
-			goto fail_destory_sem;
-		}
-
-		if (sem_destroy(&m_sem_meta_nodify)){
-			assert(0);
-			goto fail_destory_sem;
 		}
 
 		// decoding fail when m_current_decoder is nullptr.
@@ -63,12 +53,6 @@ bool AudioFileDecoder::Run(const char *file_path){
 	}
 
 	return true;
-
-fail_destory_sem:
-	{
-		int r = sem_destroy(&m_sem_meta_nodify);
-		assert(r == 0);
-	}
 
 fail_closefile:
 	delete m_ifs;
@@ -86,9 +70,8 @@ void AudioFileDecoder::Stop(){
 	m_current_decoder->stop();
 	m_input_rawdata_pipe.Clear();
 
-	void *status;
-	pthread_join(m_thread_file_read, &status);
-	pthread_join(m_thread_decode, &status);
+	m_thread_file_read.join();
+	m_thread_decode.join();
 
 	assert(!m_ifs);
 	assert(!m_current_decoder);
@@ -105,9 +88,12 @@ bool AudioFileDecoder::SetPos(int milliseconds){
 					) * (m_current_decoder->GetBitrate() / 8) / 1000
 				));
 
-	if (m_input_rawdata_pipe.GetLength())
-		m_input_rawdata_pipe.Clear();
-	return m_ifs->good();
+	m_input_rawdata_pipe.Clear();
+	m_output_pcm_pipe.Clear();
+	if (!m_ifs->good())
+		return false;
+
+	return true;
 }
 
 void *AudioFileDecoder::thread_file_read_proc(void *pthis){
@@ -138,11 +124,12 @@ void *AudioFileDecoder::thread_decode_proc(void *pthis){
 	AudioFileDecoder &obj = *reinterpret_cast<AudioFileDecoder *>(pthis);
 
 	for (obj.m_current_decoder = obj.m_decoders[0]; obj.m_current_decoder; obj.m_current_decoder++)
-		if (obj.m_current_decoder->run(&obj.m_input_rawdata_pipe, &obj.m_output_pcm_pipe, &obj.m_sem_meta_nodify))
+		if (obj.m_current_decoder->run(&obj.m_input_rawdata_pipe, &obj.m_output_pcm_pipe, &obj.m_event_meta_nodify))
 			break;
 
 	if (!obj.m_current_decoder)
-		sem_post(&obj.m_sem_meta_nodify);
+		obj.m_event_meta_nodify.set();
+
 	return nullptr;
 }
 

@@ -8,12 +8,12 @@
 bool Mp3Decoder::run(
 		BasePipe<unsigned char, INPUT_RAWDATA_BUFFER_LEN> *input_rawdata_pipe,
 		BasePipe<unsigned char, OUTPUT_PCM_BUFFER_LEN> *output_pcm_pipe,
-		sem_t *sem
+		event_t *event_meta_nodify
 		)
 {
 	m_input_rawdata_pipe = input_rawdata_pipe;
 	m_output_pcm_pipe = output_pcm_pipe;
-	m_sem_meta_read = sem;
+	m_event_meta_nodify = event_meta_nodify;
 
 	struct mad_decoder decoder;
 	mad_decoder_init(&decoder, this, mad_input_func, nullptr, nullptr, mad_output_func, mad_error_func, nullptr);
@@ -43,7 +43,6 @@ mad_flow Mp3Decoder::mad_input_func(void *data, struct mad_stream *stream){
 					   );
 
 	mad_stream_buffer(stream, mp3_decoder.m_read_buffer, rem_size + count);
-	mp3_decoder.m_set_pos = false;
 
 	if (count == 0)
 		return MAD_FLOW_STOP;
@@ -62,8 +61,6 @@ mad_flow Mp3Decoder::mad_output_func(void *data, struct mad_header const *header
 
 	if (mp3_decoder.m_stop_flag)
 		return MAD_FLOW_STOP;
-	if (mp3_decoder.m_set_pos)
-		return MAD_FLOW_CONTINUE;
 
 	if (mp3_decoder.m_channels == 0){
 		mp3_decoder.m_channels = pcm->channels;
@@ -74,7 +71,7 @@ mad_flow Mp3Decoder::mad_output_func(void *data, struct mad_header const *header
 		mp3_decoder.m_data_start = 0;
 		mp3_decoder.m_bitrate = header->bitrate;
 
-		sem_post(mp3_decoder.m_sem_meta_read);
+		mp3_decoder.m_event_meta_nodify->set();
 	}
 
 

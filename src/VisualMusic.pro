@@ -38,6 +38,11 @@ HEADERS += \
     DrawSpectrum/DrawSpectrum.h \
     gui/wxVisualMusicApp.h \
     gui/wxVisualMusicFrame.h \
+    thread/thread.h \
+    thread/threadtypes.h \
+    thread/thread_common.inl \
+    thread/thread_windows.inl \
+    thread/thread_linux.inl \
     constants.h \
     VisualMusicController.h \
     stdafx.h

@@ -17,6 +17,40 @@ bool wxVisualMusicApp::OnInit(){
 #endif
 
 
+/*
+#include "thread/thread.h"
+
+static mutex_t mutex;
+static int sum = 0;
+void *proc(void *param){
+	int n = static_cast<int>(
+				reinterpret_cast<intptr_t>(param)
+				);
+	int s = 0;
+	for (int i = 0; i < n; i++)
+		s += i;
+	mutex.lock();
+	sum += s;
+	mutex.unlock();
+	return nullptr;
+}
+
+int main(){
+	thread_pool_t<16> thread_pool;
+	thread_pool.start(get_count_of_processor());
+
+	thread_pool.add_begin();
+	for (int i = 0; i < 100; i++)
+		thread_pool.add(
+					proc,
+					reinterpret_cast<void *>(static_cast<intptr_t>(i))
+					);
+	thread_pool.add_end();
+	thread_pool.wait_all();
+	cout<<"sum="<<sum<<endl;
+}
+
+
 
 #include <iostream>
 using namespace std;
@@ -28,7 +62,6 @@ using namespace std;
 #define freq 4000
 #define t 1
 
-/*
 int main(){
 	VisualMusicController control;
 	control.OpenFile("/home/qaz/Music/CloudMusic/Diana Boncheva - Beethoven Virus.mp3");

@@ -12,11 +12,6 @@ SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::SpectrumAnalyser()
 	assert(MIN_WIN_N_VIB <= MAX_WIN_N_VIB);
 	assert(MIN_WIN_N_VIB > 0);
 
-	pthread_cond_init(&m_cond_put, nullptr);
-	pthread_cond_init(&m_cond_get, nullptr);
-	pthread_mutex_init(&m_mutex_put, nullptr);
-	pthread_mutex_init(&m_mutex_get, nullptr);
-
 	// Calculate trigonometric optimization values
 	sin_o = new double [MAX_N_DIV_CIRCLE * 2];
 	assert(sin_o);
@@ -27,7 +22,7 @@ SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::SpectrumAnalyser()
 		sin_o[i] = sin(angle);
 	}
 
-	if (pthread_create(&m_thread, nullptr, thread_proc, this))
+	if (!m_thread.start(thread_proc, this))
 		assert(0);
 }
 
@@ -84,10 +79,10 @@ void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Put(double *pcm,
 	// Make sure length is an integer multiple of FRAME_SAMPLE_N
 	assert(length % m_const_frame_sample_n == 0);
 
-	pthread_mutex_lock(&m_mutex_put);
+	m_mutex_put.lock();
 
 	while (m_input_pcm_length){
-		pthread_cond_wait(&m_cond_put, &m_mutex_put);
+		m_cond_put.wait(m_mutex_put);
 		if (m_clear_flag){
 			clear();
 			return;
@@ -100,10 +95,10 @@ void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Put(double *pcm,
 	memcpy(m_input_pcm, pcm, length * sizeof(double));
 	m_input_pcm_length = length;
 
-	pthread_mutex_unlock(&m_mutex_put);
+	m_mutex_put.unlock();
 
 	if (length)
-		pthread_cond_signal(&m_cond_put);
+		m_cond_put.signal();
 }
 
 template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
@@ -113,14 +108,14 @@ int SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Get(double (*sepe
 	if (m_clear_flag)
 		return 0;
 
-	pthread_mutex_lock(&m_mutex_get);
+	m_mutex_get.lock();
 
 	while (m_output_sepectrum_length == 0){
 		if (m_end_flag){
-			pthread_mutex_unlock(&m_mutex_get);
+			m_mutex_get.unlock();
 			return 0;
 		}
-		pthread_cond_wait(&m_cond_get, &m_mutex_get);
+		m_cond_get.wait(m_mutex_get);
 		if (m_clear_flag){
 			clear();
 			return 0;
@@ -132,9 +127,9 @@ int SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Get(double (*sepe
 	memcpy(sepectrum, m_output_sepectrum, length * sizeof(double) * MAX_FREQ_N);
 	m_output_sepectrum_length = 0;
 
-	pthread_mutex_unlock(&m_mutex_get);
+	m_mutex_get.unlock();
 
-	pthread_cond_signal(&m_cond_get);
+	m_cond_get.signal();
 
 	return length;
 }
@@ -144,8 +139,8 @@ template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
 void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Clear(){
 	m_clear_flag = true;
 
-	pthread_cond_signal(&m_cond_put);
-	pthread_cond_signal(&m_cond_get);
+	m_cond_put.signal();
+	m_cond_get.signal();
 }
 
 template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
@@ -165,8 +160,8 @@ void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::clear(){
 template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
 void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::NotifyEnd(){
 	m_end_flag = true;
-	pthread_cond_signal(&m_cond_get);
-	pthread_cond_signal(&m_cond_put);
+	m_cond_get.signal();
+	m_cond_put.signal();
 }
 
 template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
@@ -175,17 +170,17 @@ void *SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::thread_proc(voi
 			*reinterpret_cast<SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N> *>(pthis);
 
 	while (1){
-		pthread_mutex_lock(&obj.m_mutex_put);
-		pthread_mutex_lock(&obj.m_mutex_get);
+		obj.m_mutex_put.lock();
+		obj.m_mutex_get.lock();
 
 		while (obj.m_output_sepectrum_length > 0){
-			pthread_cond_wait(&obj.m_cond_get, &obj.m_mutex_get);
+			obj.m_cond_get.wait(obj.m_mutex_get);
 			if (obj.m_clear_flag)
 				obj.clear();
 		}
 
 		while (obj.m_input_pcm_length == 0){
-			pthread_cond_wait(&obj.m_cond_put, &obj.m_mutex_put);
+			obj.m_cond_put.wait(obj.m_mutex_put);
 			if (obj.m_clear_flag)
 				obj.clear();
 		}
@@ -197,11 +192,11 @@ void *SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::thread_proc(voi
 			assert(obj.m_output_sepectrum_length > 0);
 		}
 
-		pthread_mutex_unlock(&obj.m_mutex_get);
-		pthread_mutex_unlock(&obj.m_mutex_put);
+		obj.m_mutex_get.unlock();
+		obj.m_mutex_put.unlock();
 
-		pthread_cond_signal(&obj.m_cond_get);
-		pthread_cond_signal(&obj.m_cond_put);
+		obj.m_cond_get.signal();
+		obj.m_cond_put.signal();
 	}
 }
 

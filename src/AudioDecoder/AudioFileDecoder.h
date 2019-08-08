@@ -3,7 +3,7 @@
 
 #include "BaseAudioDecoder.h"
 #include <fstream>
-#include <pthread.h>
+#include "thread/thread.h"
 
 class AudioFileDecoder {
 public:
@@ -26,11 +26,11 @@ protected:
 	static BaseAudioDecoder *const *m_decoders;
 	BaseAudioDecoder *m_current_decoder;
 
-	pthread_t m_thread_file_read;
-	pthread_t m_thread_decode;
+	thread_t m_thread_file_read;
+	thread_t m_thread_decode;
 
 	BasePipe<unsigned char, INPUT_RAWDATA_BUFFER_LEN> m_input_rawdata_pipe;
 	BasePipe<unsigned char, OUTPUT_PCM_BUFFER_LEN> m_output_pcm_pipe;
 
-	sem_t m_sem_meta_nodify;
+	event_t m_event_meta_nodify;
 };

@@ -4,8 +4,7 @@
 #include "WavePlayer/WavePlayer.h"
 #include "SpectrumAnalyser/SpectrumAnalyser.h"
 #include "DrawTemplate/DrawTemplate.h"
-#include <pthread.h>
-#include <samplerate.h>
+#include "thread/thread.h"
 
 #include "constants.h"
 
@@ -42,15 +41,15 @@ protected:
 
 	bool open_wave_player();
 
-	pthread_t m_thread_forking;
+	thread_t m_thread_forking;
 	static void *thread_forking_proc(void *pthis);
 	void *forking();
 
-	pthread_t m_thread_wait_to_play;
+	thread_t m_thread_wait_to_play;
 	static void *thread_wait_to_play_proc(void *pthis);
 	void *wait_to_play();
 
-	pthread_t m_thread_put_spectrum;
+	thread_t m_thread_put_spectrum;
 	static void *thread_put_spectrum_proc(void *pthis);
 	void *put_spectrum();
 
@@ -59,9 +58,9 @@ protected:
 
 	int spectrum_time_stamp;
 
-	pthread_mutex_t m_mutex_loop;
+	mutex_t m_mutex_loop;
 
-	sem_t m_sem_start;
+	event_t m_event_start;
 	bool m_stop_flag;
 };
 
@@ -72,27 +71,23 @@ protected:
 
 inline VisualMusicController::VisualMusicController()
 {
-	sem_init(&m_sem_start, 0, 0);
-	pthread_mutex_init(&m_mutex_loop, nullptr);
-
 	generate_all_freq();
 
 	start_all_thread();
 }
 
 inline void VisualMusicController::start_all_thread(){
-
-	if (pthread_create(&m_thread_forking, nullptr, thread_forking_proc, this)){
+	if (!m_thread_forking.start(thread_forking_proc, this)){
 		assert(0);
 		return;
 	}
 
-	if (pthread_create(&m_thread_put_spectrum, nullptr, thread_put_spectrum_proc, this)){
+	if (!m_thread_put_spectrum.start(thread_put_spectrum_proc, this)){
 		assert(0);
 		return;
 	}
 
-	if (pthread_create(&m_thread_wait_to_play, nullptr, thread_wait_to_play_proc, this)){
+	if (!m_thread_wait_to_play.start(thread_wait_to_play_proc, this)){
 		assert(0);
 		return;
 	}
@@ -156,7 +151,7 @@ inline void VisualMusicController::CloseFile(){
 
 inline bool VisualMusicController::Play(){
 	m_stop_flag = false;
-	if (sem_post(&m_sem_start)){
+	if (!m_event_start.set()){
 		assert(0);
 		return false;
 	}
@@ -207,8 +202,7 @@ inline bool VisualMusicController::PlayPause(){
 }
 
 inline bool VisualMusicController::Stop(){
-	while (!sem_trywait(&m_sem_start))
-		;
+	m_event_start.reset();
 	m_stop_flag = true;
 	return true;
 }
@@ -223,8 +217,7 @@ inline void *VisualMusicController::thread_forking_proc(void *pthis){
 inline void *VisualMusicController::forking(){
 	while (1){
 
-		sem_wait(&m_sem_start);
-		sem_post(&m_sem_start);
+		m_event_start.wait();
 
 		unsigned int sample_rate = m_decoder.GetSampleRate();
 		assert(sample_rate <= MAX_SAMPLE_RATE);
@@ -261,11 +254,8 @@ inline void *VisualMusicController::forking(){
 			if (m_stop_flag){
 				m_player.Pause();
 				m_analyser.Clear();
-				cout<<"m_analyser clear."<<endl;
 				m_pipe_spectrum.Clear();
-				cout<<"m_pipe_spectrum clear."<<endl;
 				m_pipe_play_pcm.Clear();
-				cout<<"m_pipe_play_pcm clear."<<endl;
 				m_player.Stop();
 				m_decoder.SetPos(0);
 				break;
@@ -374,8 +364,7 @@ inline void *VisualMusicController::put_spectrum(){
 	double spectrum[MIN_FRAME_N_BUFFER][N_FREQ];
 	while (1){
 
-		sem_wait(&m_sem_start);
-		sem_post(&m_sem_start);
+		m_event_start.wait();
 
 		while (1){
 			// Get analysis results

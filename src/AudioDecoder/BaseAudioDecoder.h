@@ -2,7 +2,7 @@
 #include "stdafx.h"
 #include <cstddef>
 #include "BasePipe.h"
-#include <semaphore.h>
+#include "thread/thread.h"
 
 
 #define INPUT_RAWDATA_BUFFER_LEN 16384
@@ -13,10 +13,9 @@ public:
 	virtual bool run(
 			BasePipe<unsigned char, INPUT_RAWDATA_BUFFER_LEN> *input_rawdata_pipe,
 			BasePipe<unsigned char, OUTPUT_PCM_BUFFER_LEN> *output_pcm_pipe,
-			sem_t *sem  // Notify after reading audio metadata
+			event_t *event_meta_nodify  // Notify after reading audio metadata
 			) = 0;
 	void stop();
-	void notify_set_pos();
 
 	BaseAudioDecoder();
 	virtual ~BaseAudioDecoder();
@@ -50,15 +49,11 @@ protected:
 	size_t m_data_start;
 	unsigned long m_bitrate;
 
-	bool m_stop_flag, m_set_pos;
+	bool m_stop_flag;
 };
 
 inline void BaseAudioDecoder::stop(){
 	m_stop_flag = true;
-}
-
-inline void BaseAudioDecoder::notify_set_pos(){
-	m_set_pos = true;
 }
 
 
