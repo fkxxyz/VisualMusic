@@ -61,6 +61,7 @@ protected:
 	mutex_t m_mutex_loop;
 
 	event_t m_event_start;
+
 	bool m_stop_flag;
 };
 
@@ -130,8 +131,24 @@ inline void VisualMusicController::generate_all_freq(){
 }
 
 inline bool VisualMusicController::OpenFile(const char *audio_file_path){
-	if (!m_decoder.Run(audio_file_path)){
-		assert(0);
+	{
+		enum WavePlayer::status status = m_player.GetStatus();
+		if (status == WavePlayer::st_playing || status == WavePlayer::st_pause)
+			m_player.Stop();
+		if (status == WavePlayer::st_opened)
+			m_player.Close();
+	}
+	{
+		enum AudioFileDecoder::status status = m_decoder.get_status();
+		if (status == AudioFileDecoder::st_running)
+			m_decoder.stop();
+		if (status == AudioFileDecoder::st_opened)
+			m_decoder.close();
+	}
+	if (!m_decoder.open(audio_file_path)){
+		return false;
+	}
+	if (!m_decoder.run()){
 		return false;
 	}
 	if (!open_wave_player()){
@@ -146,7 +163,7 @@ inline void VisualMusicController::CloseFile(){
 		assert(0);
 		return;
 	}
-	m_decoder.Stop();
+	m_decoder.close();
 }
 
 inline bool VisualMusicController::Play(){
@@ -156,6 +173,35 @@ inline bool VisualMusicController::Play(){
 		return false;
 	}
 	return true;
+}
+
+inline bool VisualMusicController::Stop(){
+	{
+		enum WavePlayer::status status = m_player.GetStatus();
+		if (status == WavePlayer::st_playing || status == WavePlayer::st_pause){
+			if (!m_player.Stop()){
+				assert(0);
+				return false;
+			}
+		}
+	}
+
+	if (!m_event_start.is_setted())
+		return true;
+
+	m_event_start.reset();
+	m_stop_flag = true;
+
+	m_analyser.Clear();
+	m_pipe_spectrum.Clear();
+	m_pipe_play_pcm.Clear();
+
+	m_decoder.set_pos(0);
+	return true;
+}
+
+inline bool VisualMusicController::SetPos(int milliseconds){
+	return m_decoder.set_pos(milliseconds);
 }
 
 inline bool VisualMusicController::Pause(){
@@ -201,16 +247,6 @@ inline bool VisualMusicController::PlayPause(){
 	return true;
 }
 
-inline bool VisualMusicController::Stop(){
-	m_event_start.reset();
-	m_stop_flag = true;
-	return true;
-}
-
-inline bool VisualMusicController::SetPos(int milliseconds){
-	return m_decoder.SetPos(milliseconds);
-}
-
 inline void *VisualMusicController::thread_forking_proc(void *pthis){
 	return reinterpret_cast<VisualMusicController *>(pthis)->forking();
 }
@@ -251,15 +287,8 @@ inline void *VisualMusicController::forking(){
 									length * channers * sample_size,
 									length * channers * sample_size
 									);
-			if (m_stop_flag){
-				m_player.Pause();
-				m_analyser.Clear();
-				m_pipe_spectrum.Clear();
-				m_pipe_play_pcm.Clear();
-				m_player.Stop();
-				m_decoder.SetPos(0);
+			if (m_stop_flag)
 				break;
-			}
 			if (read_count < length * channers * sample_size){
 				m_pipe_play_pcm.NotifyEnd();
 				break;
@@ -276,6 +305,8 @@ inline void *VisualMusicController::forking(){
 
 			// Put into the analyser.
 			m_analyser.Put(pcm_data_double, static_cast<int>(length));
+			if (m_stop_flag)
+				break;
 
 			// Convert to the appropriate format.
 			float pcm_data_float[MAX_READ_N_SAMPLE * 2];
@@ -298,9 +329,9 @@ inline void *VisualMusicController::forking(){
 			default:
 				assert(0);
 			}
+			if (m_stop_flag)
+				break;
 		}
-
-		Stop();
 	}
 }
 

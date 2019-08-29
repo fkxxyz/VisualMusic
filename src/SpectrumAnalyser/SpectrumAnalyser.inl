@@ -141,6 +141,10 @@ void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::Clear(){
 
 	m_cond_put.signal();
 	m_cond_get.signal();
+
+	m_event_cleard.reset();
+	m_event_cleard.wait();
+	assert(!m_clear_flag);
 }
 
 template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
@@ -155,6 +159,9 @@ void SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::clear(){
 	memset(ld[1].phase, 0, m_const_freq_n * sizeof(double));
 
 	m_output_sepectrum_length = 0;
+
+	m_clear_flag = false;
+	m_event_cleard.set();
 }
 
 template <int MAX_FREQ_N, int MAX_FRAME_SAMPLE_N, int FRAME_N>
@@ -174,12 +181,16 @@ void *SpectrumAnalyser<MAX_FREQ_N, MAX_FRAME_SAMPLE_N, FRAME_N>::thread_proc(voi
 		obj.m_mutex_get.lock();
 
 		while (obj.m_output_sepectrum_length > 0){
+			if (obj.m_clear_flag)
+				obj.clear();
 			obj.m_cond_get.wait(obj.m_mutex_get);
 			if (obj.m_clear_flag)
 				obj.clear();
 		}
 
 		while (obj.m_input_pcm_length == 0){
+			if (obj.m_clear_flag)
+				obj.clear();
 			obj.m_cond_put.wait(obj.m_mutex_put);
 			if (obj.m_clear_flag)
 				obj.clear();

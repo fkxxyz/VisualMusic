@@ -49,11 +49,14 @@ protected:
 	size_t m_data_start;
 	unsigned long m_bitrate;
 
+	event_t m_event_stopped;
 	bool m_stop_flag;
 };
 
 inline void BaseAudioDecoder::stop(){
 	m_stop_flag = true;
+	m_output_pcm_pipe->Clear();
+	m_event_stopped.wait();
 }
 
 

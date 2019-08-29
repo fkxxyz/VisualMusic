@@ -18,5 +18,6 @@ protected:
 
 	unsigned char m_read_buffer[INPUT_RAWDATA_BUFFER_LEN];
 	event_t *m_event_meta_nodify;
+	bool m_is_first_frame;
 };
 

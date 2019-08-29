@@ -11,9 +11,14 @@ bool Mp3Decoder::run(
 		event_t *event_meta_nodify
 		)
 {
+	m_event_stopped.reset();
+	m_stop_flag = false;
+
 	m_input_rawdata_pipe = input_rawdata_pipe;
 	m_output_pcm_pipe = output_pcm_pipe;
 	m_event_meta_nodify = event_meta_nodify;
+
+	m_is_first_frame = true;
 
 	struct mad_decoder decoder;
 	mad_decoder_init(&decoder, this, mad_input_func, nullptr, nullptr, mad_output_func, mad_error_func, nullptr);
@@ -23,6 +28,7 @@ bool Mp3Decoder::run(
 	m_output_pcm_pipe->NotifyEnd();
 
 	m_stop_flag = false;
+	m_event_stopped.set();
 
 	return m_channels && result == MAD_ERROR_NONE;
 }
@@ -41,6 +47,9 @@ mad_flow Mp3Decoder::mad_input_func(void *data, struct mad_stream *stream){
 					   1,
 					   INPUT_RAWDATA_BUFFER_LEN - rem_size
 					   );
+
+	if (mp3_decoder.m_stop_flag)
+		return MAD_FLOW_STOP;
 
 	mad_stream_buffer(stream, mp3_decoder.m_read_buffer, rem_size + count);
 
@@ -62,7 +71,7 @@ mad_flow Mp3Decoder::mad_output_func(void *data, struct mad_header const *header
 	if (mp3_decoder.m_stop_flag)
 		return MAD_FLOW_STOP;
 
-	if (mp3_decoder.m_channels == 0){
+	if (mp3_decoder.m_is_first_frame){
 		mp3_decoder.m_channels = pcm->channels;
 		mp3_decoder.m_sample_rate = pcm->samplerate;
 		mp3_decoder.m_sizeof_sample = sizeof(int);
@@ -72,6 +81,7 @@ mad_flow Mp3Decoder::mad_output_func(void *data, struct mad_header const *header
 		mp3_decoder.m_bitrate = header->bitrate;
 
 		mp3_decoder.m_event_meta_nodify->set();
+		mp3_decoder.m_is_first_frame = false;
 	}
 
 
@@ -96,6 +106,9 @@ mad_flow Mp3Decoder::mad_output_func(void *data, struct mad_header const *header
 					pcm->length * 2 * sizeof(mad_fixed_t)
 					);
 	}
+
+	if (mp3_decoder.m_stop_flag)
+		return MAD_FLOW_STOP;
 	return MAD_FLOW_CONTINUE;
 }
 

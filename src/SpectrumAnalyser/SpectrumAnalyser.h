@@ -52,6 +52,7 @@ protected:
 	bool m_end_flag;
 
 	bool m_clear_flag;
+	event_t m_event_cleard;
 	void clear();
 
 protected:
